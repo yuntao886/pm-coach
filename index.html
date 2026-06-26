@@ -128,7 +128,7 @@ body{font-family:"PingFang SC","Microsoft YaHei",sans-serif;background:var(--bg)
   <textarea id="resume-inp" class="inp" rows="10" style="min-height:180px" placeholder="贴入你的简历内容……"></textarea>
   <div class="flex center gap12 mt8" style="justify-content:center">
     <div class="voice" onclick="toggleVoice('resume-inp')">🎤</div>
-    <span class="dim">语音朗读简历</span>
+    <span class="dim">🎤 语音输入经历</span>
   </div>
   <div class="dim mt8" style="margin-bottom:8px">AI将分析匹配度，面试完成后给你完整优化简历</div>
   <button class="btn btn-pri" id="resume-btn" onclick="submitResume()">✨ 开始分析</button>
@@ -461,11 +461,13 @@ function sendSkip(){
 }
 
 function confirmEnd(){
+  if(isEnding)return;
   showMask("结束面试",busying?"AI还在回答中，直接结束将中断当前回答。确定结束吗？":"确定结束本次模拟面试吗？AI将给你本次面试总评。",function(){endInterview()});
 }
 
 async function endInterview(){
   closeMask();
+  if(isEnding)return;
   isEnding=true;
   var summary=chatHistory.filter(function(m){return m.role=="assistant"}).slice(-1)[0];
   var text=summary?summary.content:"（面试已结束）";
@@ -563,9 +565,30 @@ function viewRecord(id){
   var rec=JSON.parse(localStorage.getItem("pc_rec_"+id)||"{}");
   if(!rec.id){alert("记录不存在");return}
   var html='<div class="dim" style="margin-bottom:12px">'+rec.time+' · '+rec.total+'道题</div>';
-  html+='<div style="white-space:pre-wrap;line-height:1.7">'+escapeHTML(rec.summary||"无总结")+'</div>';
+  var qs=rec.questions||[];
+  for(var i=0;i<qs.length;i++){
+    var q=qs[i];
+    if(q.role==="user")html+='<div style="margin:8px 0 4px;color:var(--pri);font-weight:600">你：</div>';
+    else html+='<div style="margin:8px 0 4px;color:var(--green);font-weight:600">面试官：</div>';
+    html+='<div style="white-space:pre-wrap;line-height:1.7;margin-bottom:12px">'+escapeHTML(q.content)+'</div>';
+  }
+  html+='<button class="btn btn-sec mt16" onclick="downloadRecord(\''+rec.id+'\')" style="width:auto;padding:8px 20px;height:auto">📥 导出聊天记录</button>';
   document.getElementById("detail-content").innerHTML=html;
   go("p-hist-detail");
+}
+
+function downloadRecord(id){
+  var rec=JSON.parse(localStorage.getItem("pc_rec_"+id)||"{}");
+  if(!rec.questions)return;
+  var txt="PM面试记录 - "+rec.time+"\n共"+rec.total+"道题\n---\n";
+  var qs=rec.questions;
+  for(var i=0;i<qs.length;i++){
+    var q=qs[i];
+    txt+=(q.role==="user"?"你":"面试官")+": "+q.content+"\n\n";
+  }
+  var blob=new Blob([txt],{type:"text/plain;charset=utf-8"});
+  var a=document.createElement("a");a.href=URL.createObjectURL(blob);a.download="面试记录_"+rec.time.replace(/[\/:]/g,"-")+".txt";
+  document.body.appendChild(a);a.click();document.body.removeChild(a);
 }
 
 /* ========== 正式面试 ========== */
@@ -573,16 +596,20 @@ function viewRecord(id){
 function startFormal(){if(!selectedPm){alert("请选择一个方向");return}alert("正式面试功能开发中，当前版本先测模拟面试")}
 
 /* ========== 语音 ========== */
-var rec=null;
+var rec=null,recording=false;
 function toggleVoice(targetId){
-  if(!("webkitSpeechRecognition" in window)){alert("浏览器不支持语音识别");return}
-  if(!rec){rec=new webkitSpeechRecognition();rec.continuous=false;rec.interimResults=false;rec.lang="zh-CN";
+  if(!("webkitSpeechRecognition" in window)&&!("SpeechRecognition" in window)){alert("浏览器不支持语音识别，请用Chrome打开");return}
+  var SR=window.SpeechRecognition||window.webkitSpeechRecognition;
+  if(!rec){rec=new SR();rec.continuous=false;rec.interimResults=false;rec.lang="zh-CN";
     rec.onresult=function(e){var t=e.results[0][0].transcript;
       var el=document.getElementById(targetId||"chat-inp");if(!el||el.offsetParent===null)el=document.getElementById("chat-inp");
-      if(el&&el.offsetParent!==null)el.value=t};
-    rec.onerror=function(){}}
-  if(rec&&rec.continuous){try{rec.stop()}catch(e){}}
-  try{rec.start()}catch(e){alert("语音启动失败，请重试")}
+      if(el&&el.offsetParent!==null){el.value=(el.value?el.value+" ":"")+t}
+    };
+    rec.onerror=function(e){recording=false;};
+    rec.onend=function(){recording=false;};
+  }
+  if(recording){try{rec.stop()}catch(e){}recording=false;return}
+  try{rec.start();recording=true}catch(e){alert("语音启动失败："+e.message);recording=false}
 }
 
 /* ========== 全局点击：p-history 进入时刷新列表 ========== */
