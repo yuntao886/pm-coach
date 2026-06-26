@@ -126,6 +126,10 @@ body{font-family:"PingFang SC","Microsoft YaHei",sans-serif;background:var(--bg)
   </div>
   <div style="font-size:17px;font-weight:600;margin-bottom:12px">把你的简历贴在这里</div>
   <textarea id="resume-inp" class="inp" rows="10" style="min-height:180px" placeholder="贴入你的简历内容……"></textarea>
+  <div class="flex center gap12 mt8" style="justify-content:center">
+    <div class="voice" onclick="toggleVoice('resume-inp')">🎤</div>
+    <span class="dim">语音朗读简历</span>
+  </div>
   <div class="dim mt8" style="margin-bottom:8px">AI将分析匹配度，面试完成后给你完整优化简历</div>
   <button class="btn btn-pri" id="resume-btn" onclick="submitResume()">✨ 开始分析</button>
 </div>
@@ -140,28 +144,16 @@ body{font-family:"PingFang SC","Microsoft YaHei",sans-serif;background:var(--bg)
   <div class="card" style="background:rgba(167,139,250,0.06);text-align:center;margin-bottom:14px">
     <span style="color:var(--pri);font-size:14px">🎯 面试完成后给你完整优化简历</span>
   </div>
-  <button class="btn btn-pri" style="margin-bottom:10px" onclick="go('p-setup')">⚙️ 设置面试 →</button>
-  <button class="btn btn-sec" onclick="go('p-intro')">🎤 自我介绍热热身</button>
-</div>
-
-<!-- ========== 面试设置 ========== -->
-<div id="p-setup" class="page" style="padding:24px">
-  <div class="flex gap12 center" style="margin-bottom:24px">
-    <span class="back" onclick="go('p-result')">← 返回</span>
-    <span class="h2">面试设置</span>
-  </div>
   <div class="card" style="margin-bottom:16px">
     <div class="h2" style="margin-bottom:12px">📝 题目数量</div>
     <div class="flex gap12" id="num-row">
-      <div class="num-opt on" data-n="3">3</div>
-      <div class="num-opt" data-n="5">5</div>
-      <div class="num-opt" data-n="8">8</div>
-      <div class="num-opt" data-n="10">10</div>
+      <div class="num-opt on" data-n="3">3</div><div class="num-opt" data-n="5">5</div>
+      <div class="num-opt" data-n="8">8</div><div class="num-opt" data-n="10">10</div>
     </div>
   </div>
   <div class="card" style="margin-bottom:20px">
     <div class="h2" style="margin-bottom:12px">🎯 目标JD（可选）</div>
-    <textarea id="jd-inp" class="inp" rows="4" placeholder="贴上你想面的JD，AI会针对性出题……"></textarea>
+    <textarea id="jd-inp" class="inp" rows="3" placeholder="贴上你想面的JD，AI会针对性出题……"></textarea>
   </div>
   <button class="btn btn-pri" onclick="startMock()">🚀 开始面试</button>
 </div>
@@ -171,7 +163,7 @@ body{font-family:"PingFang SC","Microsoft YaHei",sans-serif;background:var(--bg)
   <div class="back" style="position:absolute;top:20px;left:24px" onclick="go('p-entry')">← 返回</div>
   <div style="font-size:17px;font-weight:600">让我们听听你的故事</div>
   <div class="sub mt8">可以说说学校、经历、为什么想做PM</div>
-  <button id="voice-btn" class="voice" style="width:80px;height:80px;font-size:32px;margin-top:32px" onclick="toggleVoice()">🎤</button>
+  <button id="voice-btn" class="voice" style="width:80px;height:80px;font-size:32px;margin-top:32px" onclick="toggleVoice('intro-inp')">🎤</button>
   <div class="sub mt12" id="voice-label">点击说话</div>
   <textarea id="intro-inp" class="inp mt16" rows="3" placeholder="或者打字输入……" style="max-width:340px"></textarea>
   <button class="btn btn-pri mt16" style="max-width:340px" id="intro-btn" onclick="submitIntro()">说完了 →</button>
@@ -189,7 +181,7 @@ body{font-family:"PingFang SC","Microsoft YaHei",sans-serif;background:var(--bg)
   </div>
   <div id="chat-box" class="chat grow"></div>
   <div class="bar bot">
-    <div class="voice" onclick="toggleVoice()">🎤</div>
+    <div class="voice" onclick="toggleVoice('chat-inp')">🎤</div>
     <input id="chat-inp" class="inp grow" style="height:40px;padding:0 12px;font-size:14px" placeholder="输入你的回答……" onkeydown="if(event.key==='Enter')sendMsg()">
     <button class="btn btn-pri" style="width:auto;padding:8px 16px;font-size:13px;height:36px" id="next-btn" disabled>下一题</button>
     <button class="btn btn-sec" style="width:auto;padding:8px 12px;font-size:13px;height:36px" id="skip-btn" onclick="sendSkip()" disabled>跳过</button>
@@ -338,8 +330,8 @@ async function submitResume(){
 }
 
 /* ========== 面试设置 ========== */
-(function(){
-  var row=document.getElementById("num-row");
+function initNumOpts(){
+  var row=document.getElementById("num-row");if(!row)return;
   var opts=row.getElementsByClassName("num-opt");
   for(var i=0;i<opts.length;i++){(function(o){
     o.onclick=function(){
@@ -350,7 +342,7 @@ async function submitResume(){
     };
   })(opts[i])}
   document.getElementById("q-total").textContent=questionTotal;
-})();
+}
 
 /* ========== 模拟面试 ========== */
 function startMock(){
@@ -477,22 +469,17 @@ async function endInterview(){
   isEnding=true;
   var summary=chatHistory.filter(function(m){return m.role=="assistant"}).slice(-1)[0];
   var text=summary?summary.content:"（面试已结束）";
-  showLoading("正在结束面试……");
+  showLoading("正在生成总评……");
+  addUserMsg("[结束面试]");
   try{
     var endMsg="[指令] 面试结束，请给出本次面试的总评报告，包含：1.整体表现评分 2.各维度点评 3.改进建议 4.简历优化";
     var r=await fetch(API_URL,{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({type:"interview",messages:chatHistory.concat([{role:"user",content:endMsg}])})});
     var d=await r.json();text=d.text||text;
   }catch(e){/* 即使API失败也保存当前记录 */}
   hideLoading();
-  interviewRecord.summary=text;
-  interviewRecord.questions=chatHistory.slice();
-  saveRecord(interviewRecord);
-  mockCount++;localStorage.setItem("pc_mc",mockCount);
-  updateHome();
-  inInterview=false;busying=false;isEnding=false;
-  showMask("面试完成 ✅","本次面试已保存到面试记录。",function(){go("p-home")},"查看记录","回首页");
-  document.getElementById("mask-ok").onclick=function(){closeMask();go("p-history")};
-  document.getElementById("mask-cancel").onclick=function(){closeMask();go("p-home")};
+  addAIMsg(text,false);
+  chatHistory.push({role:"assistant",content:text});
+  finishInterview(text);
 }
 
 async function callInterview(){
@@ -532,11 +519,12 @@ function finishInterview(text){
   mockCount++;localStorage.setItem("pc_mc",mockCount);
   updateHome();
   inInterview=false;busying=false;
-  setTimeout(function(){
-    showMask("面试完成 ✅","本次面试已保存到面试记录。",function(){go("p-home")},"查看记录","回首页");
-    document.getElementById("mask-ok").onclick=function(){closeMask();go("p-history")};
-    document.getElementById("mask-cancel").onclick=function(){closeMask();go("p-home")};
-  },500);
+  var box=document.getElementById("chat-box");
+  var d=document.createElement("div");d.className="msg-ai";d.style.justifyContent="center";
+  d.innerHTML='<button class="btn btn-pri" style="width:auto;padding:12px 32px" onclick="go(\'p-home\')">🏠 返回首页</button>';
+  box.appendChild(d);box.scrollTop=box.scrollHeight;
+  var qs=document.getElementById("q-status");qs.textContent="已完成";qs.className="status done";
+  setButtons(true);
 }
 
 function confirmExit(){
@@ -586,10 +574,12 @@ function startFormal(){if(!selectedPm){alert("请选择一个方向");return}ale
 
 /* ========== 语音 ========== */
 var rec=null;
-function toggleVoice(){
+function toggleVoice(targetId){
   if(!("webkitSpeechRecognition" in window)){alert("浏览器不支持语音识别");return}
   if(!rec){rec=new webkitSpeechRecognition();rec.continuous=false;rec.interimResults=false;rec.lang="zh-CN";
-    rec.onresult=function(e){var t=e.results[0][0].transcript;var ci=document.getElementById("chat-inp");var ii=document.getElementById("intro-inp");if(ci&&ci.offsetParent!==null)ci.value=t;if(ii&&ii.offsetParent!==null)ii.value=t};
+    rec.onresult=function(e){var t=e.results[0][0].transcript;
+      var el=document.getElementById(targetId||"chat-inp");if(!el||el.offsetParent===null)el=document.getElementById("chat-inp");
+      if(el&&el.offsetParent!==null)el.value=t};
     rec.onerror=function(){}}
   if(rec&&rec.continuous){try{rec.stop()}catch(e){}}
   try{rec.start()}catch(e){alert("语音启动失败，请重试")}
@@ -600,6 +590,7 @@ var origGo=_go;
 _go=function(id){
   origGo(id);
   if(id==="p-history")renderHistory();
+  if(id==="p-result")initNumOpts();
 };
 </script>
 </body>
