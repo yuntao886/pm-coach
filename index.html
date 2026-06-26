@@ -174,8 +174,9 @@ body{font-family:"PingFang SC","Microsoft YaHei",sans-serif;background:var(--bg)
   <div class="bar top">
     <span class="back" onclick="confirmExit()">← 返回</span>
     <div style="text-align:center">
-      <span class="sub" style="font-size:14px">模拟面试</span>
+      <span class="sub" style="font-size:14px" id="mock-title">模拟面试</span>
       <span class="status live" style="margin-left:8px" id="q-status">1/<span id="q-total">5</span></span>
+      <span id="timer" style="display:none;margin-left:8px;font-size:13px;color:var(--amber);font-weight:600">⏱ 20s</span>
     </div>
     <span style="font-size:14px;color:var(--red);cursor:pointer" onclick="confirmEnd()">结束</span>
   </div>
@@ -258,7 +259,7 @@ var busying=false;
 var interviewId="";
 var interviewRecord=null;
 var typewriterTimer=null;
-var isEnding=false;
+var isEnding=false,isFormal=false,timerSec=0,timerId=null;
 
 /* ========== 粒子背景 ========== */
 (function(){var c=document.getElementById("bg"),x=c.getContext("2d");var w,h,ps=[];
@@ -373,6 +374,8 @@ async function startInterview(initMsg){
   questionIndex=0;
   addAIMsg("",true);
   busying=true;setButtons(true);
+  document.getElementById("mock-title").textContent=isFormal?("正式面试 · "+selectedPm):"模拟面试";
+  if(isFormal)startCountdown();
   try{
     var fetchPromise=fetch(API_URL,{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({type:"interview",messages:chatHistory})});
     var timeoutPromise=new Promise(function(r){setTimeout(function(){r({timeout:true})},25000)});
@@ -388,6 +391,7 @@ async function startInterview(initMsg){
     updateQStatus();
     setButtons(false);
     busying=false;
+    if(isFormal)startCountdown();
   }catch(e){
     var aiDiv=box.lastElementChild&&box.lastElementChild.querySelector(".msg-ai-b");
     if(aiDiv)aiDiv.textContent="连接失败："+e.message;
@@ -446,6 +450,7 @@ function setButtons(disabled){
 /* ========== 面试交互 ========== */
 async function sendMsg(){
   if(busying)return;
+  stopCountdown();
   var inp=document.getElementById("chat-inp");var text=inp.value.trim();if(!text)return;
   addUserMsg(text);chatHistory.push({role:"user",content:text});inp.value="";
   setButtons(true);busying=true;
@@ -455,7 +460,8 @@ async function sendMsg(){
 
 function sendSkip(){
   if(busying)return;
-  addUserMsg("[跳过]");chatHistory.push({role:"user",content:"[指令] 此题跳过，给参考答案并出下一题"});
+  stopCountdown();
+  addUserMsg("[跳过]");chatHistory.push({role:"user",content:isFormal?"[指令] 跳过":"[指令] 此题跳过，给参考答案并出下一题"});
   setButtons(true);busying=true;
   addAIMsg("",true);
   callInterview();
@@ -508,6 +514,7 @@ async function callInterview(){
     }
 
     setButtons(false);busying=false;
+    if(isFormal)startCountdown();
   }catch(e){
     var aiDiv=box.lastElementChild&&box.lastElementChild.querySelector(".msg-ai-b");
     if(aiDiv)aiDiv.textContent="连接失败："+e.message;
@@ -516,20 +523,25 @@ async function callInterview(){
 }
 
 function finishInterview(text){
+  stopCountdown();
   interviewRecord.summary=text;
   interviewRecord.questions=chatHistory.slice();
   saveRecord(interviewRecord);
-  mockCount++;localStorage.setItem("pc_mc",mockCount);
+  if(!isFormal){mockCount++;localStorage.setItem("pc_mc",mockCount)}
   updateHome();
-  inInterview=false;busying=false;
+  inInterview=false;busying=false;isFormal=false;
   var box=document.getElementById("chat-box");
   var d=document.createElement("div");d.className="msg-ai";d.style.justifyContent="center";
-  d.innerHTML='<button class="btn btn-pri" style="width:auto;padding:12px 32px" onclick="go(\'p-home\')">🏠 返回首页</button>';
+  d.innerHTML='<button class="btn btn-pri" style="width:auto;padding:12px 32px" onclick="forceHome()">🏠 返回首页</button>';
   box.appendChild(d);box.scrollTop=box.scrollHeight;
   var qs=document.getElementById("q-status");qs.textContent="已完成";qs.className="status done";
   setButtons(true);
 }
 
+function forceHome(){
+  document.querySelectorAll(".page").forEach(function(p){p.classList.remove("on")});
+  document.getElementById("p-home").classList.add("on");
+}
 function confirmExit(){
   showMask("退出面试","退出后本次不保存。确定退出吗？",function forceExit(){
     inInterview=false;busying=false;isEnding=false;
@@ -595,7 +607,29 @@ function downloadRecord(id){
 
 /* ========== 正式面试 ========== */
 (function(){var row=document.getElementById("pm-tags");for(var i=0;i<PMS.length;i++){(function(p){var t=document.createElement("span");t.className="tag-opt";t.textContent=p;t.onclick=function(){var all=document.getElementsByClassName("tag-opt");for(var j=0;j<all.length;j++)all[j].classList.remove("on");t.classList.add("on");selectedPm=p};row.appendChild(t)})(PMS[i])}})();
-function startFormal(){if(!selectedPm){alert("请选择一个方向");return}alert("正式面试功能开发中，当前版本先测模拟面试")}
+function startFormal(){
+  if(!selectedPm){alert("请选择一个方向");return}
+  var jd=document.getElementById("jd-inp-f").value.trim();
+  isFormal=true;
+  var initMsg="[设置] PM类型:"+selectedPm+(jd?" | JD:"+jd:"");
+  if(matchResult)initMsg+="\n[匹配结果] "+matchResult;
+  if(resumeText)initMsg+="\n[简历原文] "+resumeText;
+  initMsg+="\n[指令] 开始正式面试";
+  startInterview(initMsg);
+}
+
+function startCountdown(){
+  timerSec=20;
+  var el=document.getElementById("timer");el.style.display="inline";el.textContent="⏱ "+timerSec+"s";el.style.color="var(--amber)";
+  clearInterval(timerId);
+  timerId=setInterval(function(){
+    timerSec--;el.textContent="⏱ "+timerSec+"s";
+    if(timerSec<=5)el.style.color="var(--red)";
+    if(timerSec<=0){clearInterval(timerId);el.style.display="none";sendSkip()}
+  },1000);
+}
+
+function stopCountdown(){clearInterval(timerId);document.getElementById("timer").style.display="none";}
 
 /* ========== 语音 ========== */
 var rec=null,recording=false,recTarget=null;

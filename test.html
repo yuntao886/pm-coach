@@ -1,0 +1,97 @@
+<!DOCTYPE html><html lang="zh"><head><meta charset="UTF-8"><title>PM面试教练 · 测试页</title>
+<style>
+*{margin:0;padding:0;box-sizing:border-box}
+body{font-family:"PingFang SC","Microsoft YaHei",sans-serif;background:#07070f;color:#e8e8f0;min-height:100vh}
+.top{background:rgba(12,12,25,0.9);border-bottom:1px solid rgba(255,255,255,0.04);padding:14px 24px;font-size:18px;font-weight:700;text-shadow:0 0 16px rgba(167,139,250,0.3)}
+.section{max-width:700px;margin:24px auto;padding:0 24px}
+.card{background:rgba(16,18,32,0.8);border:1px solid rgba(255,255,255,0.06);border-radius:16px;padding:24px;margin-bottom:16px}
+.card h2{font-size:16px;margin-bottom:12px;display:flex;align-items:center;gap:8px}
+.ta{width:100%;background:rgba(8,8,18,0.9);border:1px solid rgba(255,255,255,0.06);color:#e8e8f0;padding:12px 14px;border-radius:10px;font-size:14px;line-height:1.6;resize:vertical;min-height:100px}
+.btn{background:linear-gradient(135deg,#a78bfa,#818cf8);color:#fff;border:none;padding:12px 24px;border-radius:10px;font-size:14px;font-weight:600;cursor:pointer;width:100%;margin-top:10px}
+.btn:disabled{opacity:0.35;cursor:not-allowed}
+.btn-sm{width:auto;padding:8px 18px;font-size:13px;margin-top:6px}
+.out{background:rgba(8,8,18,0.9);border:1px solid rgba(255,255,255,0.06);border-radius:10px;padding:16px;margin-top:12px;min-height:60px;font-size:14px;line-height:1.7;white-space:pre-wrap;max-height:400px;overflow-y:auto}
+.st{font-size:12px;color:#9ca3af;margin:8px 0}
+.green{color:#2dd4bf}.red{color:#fb7185}.purple{color:#a78bfa}
+.flex{display:flex;gap:8px}
+.chat-out{max-height:500px}
+</style></head>
+<body>
+<div class="top">PM面试教练 · 双Agent测试</div>
+
+<div class="section">
+  <!-- 第一步 -->
+  <div class="card">
+    <h2>📄 第一步：简历分析 <span class="st" id="s1-status">待测试</span></h2>
+    <p class="st">粘贴简历，点发送，验证简历审核Agent是否能1-3秒返回匹配结果</p>
+    <textarea class="ta" id="s1-inp">985本科计算机专业，有一段字节跳动产品实习生经历，负责过用户增长相关的AB实验，会用SQL和Figma。想做AI产品经理。</textarea>
+    <button class="btn" id="s1-btn" onclick="step1()">✨ 发送到简历审核Agent</button>
+    <div class="out" id="s1-out" style="color:#6b7280">等分析结果……</div>
+  </div>
+
+  <!-- 第二步 -->
+  <div class="card">
+    <h2>🤖 第二步：面试对话 <span class="st" id="s2-status">待测试</span></h2>
+    <p class="st">第一步返回结果后，点发送验证面试Agent是否能流式返回</p>
+    <textarea class="ta" id="s2-inp" readonly style="color:#6b7280">等第一步完成……</textarea>
+    <button class="btn" id="s2-btn" onclick="step2()" disabled>🚀 发送到面试教练Agent</button>
+    <div class="out chat-out" id="s2-out" style="color:#6b7280">等面试官回复……</div>
+  </div>
+</div>
+
+<script>
+const AK="sk-ws-H.RPPMMLP.CLts.MEUCIAhjyUzh3NiGKcgeaDzlenO4SypPEP0aCjWsOVh40UAFAiEA_9Oe38OS4jWXr1e760LZku-JTFgu81MrQ9zFlzd8Hx4";
+const RURL="https://dashscope.aliyuncs.com/api/v1/apps/4c72d1a7b9ca42f78428cf8836b355ef/completions";
+const IURL="https://dashscope.aliyuncs.com/api/v1/apps/76a51d9b50a0497ab0f5c753fb0d9a3d/completions";
+var matchResult="";
+
+async function step1(){
+  var inp=document.getElementById("s1-inp").value.trim(),btn=document.getElementById("s1-btn"),
+      st=document.getElementById("s1-status"),out=document.getElementById("s1-out");
+  if(!inp)return;
+  btn.disabled=true;btn.textContent="⏳ 发送中…";st.textContent="请求中";st.className="st";
+  var start=Date.now();
+  try{
+    var r=await fetch(RURL,{method:"POST",headers:{"Content-Type":"application/json","Authorization":"Bearer "+AK},body:JSON.stringify({input:{messages:[{role:"user",content:"[简历] "+inp}]},parameters:{}})});
+    var d=await r.json(),t=((Date.now()-start)/1000).toFixed(1);
+    st.textContent="✅ 成功 · "+t+"s";st.className="st green";
+    matchResult=d.output?d.output.text:"";
+    out.textContent=matchResult;
+    document.getElementById("s2-inp").value="[匹配结果] "+matchResult+"\n[简历原文] "+inp;
+    document.getElementById("s2-inp").style.color="#e8e8f0";
+    document.getElementById("s2-btn").disabled=false;
+  }catch(e){
+    st.textContent="❌ 失败";st.className="st red";
+    out.textContent="错误："+e.message+"\n\n💡 如果报CORS错误，请通过 http://localhost:8080 访问此页面，不要用 file:// 打开";
+  }
+  btn.disabled=false;btn.textContent="✨ 再测一次";
+}
+
+async function step2(){
+  var inp=document.getElementById("s2-inp").value.trim(),btn=document.getElementById("s2-btn"),
+      st=document.getElementById("s2-status"),out=document.getElementById("s2-out");
+  if(!inp)return;
+  btn.disabled=true;btn.textContent="⏳ 发送中…";st.textContent="请求中";st.className="st";out.textContent="";
+  var start=Date.now();
+  try{
+    var r=await fetch(IURL,{method:"POST",headers:{"Content-Type":"application/json","Authorization":"Bearer "+AK},body:JSON.stringify({input:{messages:[{role:"user",content:inp}]},parameters:{stream:true}})});
+    st.textContent="✅ 已连接 HTTP "+r.status+" · 接收流式数据……";st.className="st green";
+    var reader=r.body.getReader(),dec=new TextDecoder(),full="";
+    while(true){var{value,done}=await reader.read();if(done)break;
+      var text=dec.decode(value),lines=text.split("\n");
+      for(var i=0;i<lines.length;i++){var l=lines[i];if(l.indexOf("data:")===0){
+        var d=l.slice(5).trim();if(d==="[DONE]")break;
+        try{var j=JSON.parse(d);full+=j.output?j.output.text||"":""}catch(e){}}}
+      out.textContent=full;
+    }
+    var t=((Date.now()-start)/1000).toFixed(1);
+    st.textContent="✅ 完成 · "+t+"s · "+full.length+" 字";st.className="st green";
+    if(!full)out.textContent="⚠️ Agent返回了空内容。可能原因：1.提示词太长导致超时 2.模型配置有问题。请检查百炼控制台。";
+  }catch(e){
+    st.textContent="❌ 失败";st.className="st red";
+    out.textContent="错误："+e.message+"\n\n💡 如果报CORS错误，请通过 http://localhost:8080 访问此页面，不要用 file:// 打开";
+  }
+  btn.disabled=false;btn.textContent="🚀 再测一次";
+}
+</script>
+</body></html>

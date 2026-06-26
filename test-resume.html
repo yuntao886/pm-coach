@@ -1,0 +1,34 @@
+<!DOCTYPE html><html lang="zh"><head><meta charset="UTF-8"><title>简历API测试</title>
+<style>body{font-family:"PingFang SC",sans-serif;background:#0a0a14;color:#e8e8f0;padding:40px;max-width:600px;margin:0 auto}.s{background:#0f0f1e;border:1px solid rgba(255,255,255,0.1);color:#e8e8f0;width:100%;min-height:120px;padding:12px;border-radius:8px;font-size:14px;margin:12px 0}.btn{background:linear-gradient(135deg,#a78bfa,#818cf8);color:#fff;border:none;padding:14px 28px;border-radius:10px;font-size:16px;cursor:pointer;width:100%}.btn:hover{opacity:0.9}.out{background:#0f0f1e;border:1px solid rgba(255,255,255,0.1);padding:16px;border-radius:8px;white-space:pre-wrap;margin-top:16px;min-height:60px;font-size:14px;line-height:1.6}</style></head>
+<body>
+<h1>📊 简历分析API测试</h1>
+<p style="color:#9ca3af;margin:8px 0 24px">粘贴一段简历，测试Agent能不能返回匹配结果</p>
+<textarea class="s" id="inp" placeholder="粘贴简历内容……">985本科计算机专业，有一段字节跳动产品实习生经历，负责过用户增长相关的AB实验，会用SQL和Figma。想做AI产品经理。</textarea>
+<button class="btn" id="btn" onclick="test()">✨ 发送测试</button>
+<div style="color:#9ca3af;font-size:13px;margin:8px 0" id="status"></div>
+<div class="out" id="out">等待发送……</div>
+
+<script>
+const AK="sk-ws-H.RPPMMLP.CLts.MEUCIAhjyUzh3NiGKcgeaDzlenO4SypPEP0aCjWsOVh40UAFAiEA_9Oe38OS4jWXr1e760LZku-JTFgu81MrQ9zFlzd8Hx4";
+const URL="https://dashscope.aliyuncs.com/api/v1/apps/4c72d1a7b9ca42f78428cf8836b355ef/completions";
+
+async function test(){
+  var inp=document.getElementById("inp").value.trim();
+  if(!inp)return;
+  var btn=document.getElementById("btn"),st=document.getElementById("status"),out=document.getElementById("out");
+  btn.disabled=true;btn.textContent="⏳ 发送中…";st.textContent="";out.textContent="请求中……";
+  var start=Date.now();
+  try{
+    var r=await fetch(URL,{method:"POST",headers:{"Content-Type":"application/json","Authorization":"Bearer "+AK},body:JSON.stringify({input:{messages:[{role:"user",content:"[简历] "+inp}]},parameters:{}})});
+    var d=await r.json();
+    var t=((Date.now()-start)/1000).toFixed(1);
+    st.textContent="✅ 成功 · 耗时 "+t+"s · HTTP "+r.status;
+    out.textContent=d.output?d.output.text:JSON.stringify(d,null,2);
+  }catch(e){
+    st.textContent="❌ 失败 · "+(Date.now()-start)/1000+"s";
+    out.textContent="错误："+e.message;
+  }
+  btn.disabled=false;btn.textContent="✨ 再测一次";
+}
+</script>
+</body></html>
