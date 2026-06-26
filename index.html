@@ -300,8 +300,9 @@ function updateHome(){
   var ml=document.getElementById("mock-label");
   ml.textContent=mockCount===0?"开始你的第一次模拟面试吧":"你已经模拟"+mockCount+"次 · 超过"+Math.min(90,mockCount*20)+"%的人";
   var fc=document.getElementById("formal-card"),ft=document.getElementById("formal-title"),fl=document.getElementById("formal-label");
-  if(mockCount>0){fc.style.opacity="1";fc.style.cursor="pointer";ft.textContent="⏱ 正式面试";fl.textContent="挑战一下自己吧"}
-  else{fc.style.opacity="0.4";fc.style.cursor="default";ft.textContent="🔒 正式面试";fl.textContent="先完成模拟面试解锁"}
+  var unlocked=mockCount>0||(JSON.parse(localStorage.getItem("pc_hist")||"[]")).length>0;
+  if(unlocked){fc.style.opacity="1";fc.style.cursor="pointer";ft.textContent="⏱ 正式面试";fl.textContent="挑战一下自己吧";fc.onclick=function(){go("p-formal")}}
+  else{fc.style.opacity="0.4";fc.style.cursor="default";ft.textContent="🔒 正式面试";fl.textContent="先完成模拟面试解锁";fc.onclick=function(){}}
   var hl=document.getElementById("hist-label");
   var hist=JSON.parse(localStorage.getItem("pc_hist")||"[]");
   hl.textContent=hist.length?hist.length+"条记录":"暂无记录";
@@ -530,9 +531,10 @@ function finishInterview(text){
 }
 
 function confirmExit(){
-  showMask("面试还没完成","退出后本次不保存。确定退出吗？",function(){
+  showMask("退出面试","退出后本次不保存。确定退出吗？",function forceExit(){
     inInterview=false;busying=false;isEnding=false;
-    go("p-home")
+    document.querySelectorAll(".page").forEach(function(p){p.classList.remove("on")});
+    document.getElementById("p-home").classList.add("on");
   });
 }
 
@@ -596,19 +598,25 @@ function downloadRecord(id){
 function startFormal(){if(!selectedPm){alert("请选择一个方向");return}alert("正式面试功能开发中，当前版本先测模拟面试")}
 
 /* ========== 语音 ========== */
-var rec=null,recording=false;
+var rec=null,recording=false,recTarget=null;
 function toggleVoice(targetId){
-  if(!("webkitSpeechRecognition" in window)&&!("SpeechRecognition" in window)){alert("浏览器不支持语音识别，请用Chrome打开");return}
+  var el=document.getElementById(targetId||"chat-inp");
+  if(!el||el.offsetParent===null){alert("请先进入页面再使用语音");return}
   var SR=window.SpeechRecognition||window.webkitSpeechRecognition;
-  if(!rec){rec=new SR();rec.continuous=false;rec.interimResults=false;rec.lang="zh-CN";
-    rec.onresult=function(e){var t=e.results[0][0].transcript;
-      var el=document.getElementById(targetId||"chat-inp");if(!el||el.offsetParent===null)el=document.getElementById("chat-inp");
-      if(el&&el.offsetParent!==null){el.value=(el.value?el.value+" ":"")+t}
-    };
-    rec.onerror=function(e){recording=false;};
-    rec.onend=function(){recording=false;};
-  }
+  if(!SR){alert("浏览器不支持语音识别，请用Chrome打开");return}
   if(recording){try{rec.stop()}catch(e){}recording=false;return}
+  rec=new SR();rec.lang="zh-CN";rec.continuous=false;rec.interimResults=false;
+  recTarget=el;
+  rec.onresult=function(e){
+    var t="";for(var i=0;i<e.results.length;i++)t+=e.results[i][0].transcript;
+    if(recTarget&&recTarget.offsetParent!==null){
+      recTarget.value=(recTarget.value?recTarget.value+" ":"")+t;
+      recTarget.focus();
+    }
+    recording=false;
+  };
+  rec.onerror=function(e){recording=false;};
+  rec.onend=function(){recording=false;};
   try{rec.start();recording=true}catch(e){alert("语音启动失败："+e.message);recording=false}
 }
 
