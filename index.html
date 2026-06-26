@@ -290,7 +290,7 @@ function showMask(t,txt,fn,okText,cancelText){
   maskFn=fn;
 }
 function closeMask(){document.getElementById("mask").classList.remove("on");maskFn=null}
-document.getElementById("mask-ok").onclick=function(){closeMask();if(maskFn)maskFn()};
+document.getElementById("mask-ok").onclick=function(){var fn=maskFn;closeMask();if(fn)fn()};
 
 /* ========== Loading ========== */
 function showLoading(txt){document.getElementById("loading").style.display="flex";document.getElementById("loading-text").textContent=txt||"处理中……"}
