@@ -259,7 +259,7 @@ var matchResult="";
 var chatHistory=[];
 var inInterview=false;
 var selectedPm="";
-var maskFn=null;
+var currentController=null;
 var questionTotal=5;
 var questionIndex=0;
 var busying=false;
@@ -469,17 +469,30 @@ function sendSkip(){
 }
 
 function confirmEnd(){
-  if(busying)return;
-  showMask("结束面试","确定结束本次模拟面试吗？AI将给你本次面试总评。",function(){endInterview()});
+  showMask("结束面试",busying?"AI还在回答中，直接结束将中断当前回答。确定结束吗？":"确定结束本次模拟面试吗？AI将给你本次面试总评。",function(){endInterview()});
 }
 
 async function endInterview(){
   closeMask();
   isEnding=true;
-  addUserMsg("[结束面试]");chatHistory.push({role:"user",content:"[指令] 面试结束，请给出本次面试的总评报告，包含：1.整体表现评分 2.各维度点评 3.改进建议 4.简历优化"});
-  setButtons(true);busying=true;
-  addAIMsg("",true);
-  await callInterview();
+  var summary=chatHistory.filter(function(m){return m.role=="assistant"}).slice(-1)[0];
+  var text=summary?summary.content:"（面试已结束）";
+  showLoading("正在结束面试……");
+  try{
+    var endMsg="[指令] 面试结束，请给出本次面试的总评报告，包含：1.整体表现评分 2.各维度点评 3.改进建议 4.简历优化";
+    var r=await fetch(API_URL,{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({type:"interview",messages:chatHistory.concat([{role:"user",content:endMsg}])})});
+    var d=await r.json();text=d.text||text;
+  }catch(e){/* 即使API失败也保存当前记录 */}
+  hideLoading();
+  interviewRecord.summary=text;
+  interviewRecord.questions=chatHistory.slice();
+  saveRecord(interviewRecord);
+  mockCount++;localStorage.setItem("pc_mc",mockCount);
+  updateHome();
+  inInterview=false;busying=false;isEnding=false;
+  showMask("面试完成 ✅","本次面试已保存到面试记录。",function(){go("p-home")},"查看记录","回首页");
+  document.getElementById("mask-ok").onclick=function(){closeMask();go("p-history")};
+  document.getElementById("mask-cancel").onclick=function(){closeMask();go("p-home")};
 }
 
 async function callInterview(){
@@ -496,12 +509,6 @@ async function callInterview(){
     if(aiDiv){aiDiv.textContent=text;aiDiv.style.color="#e8e8f0";aiDiv.classList.remove("loading")}
     chatHistory.push({role:"assistant",content:text});
 
-    if(isEnding){
-      isEnding=false;
-      finishInterview(text);
-      return;
-    }
-
     questionIndex++;
     updateQStatus();
 
@@ -515,7 +522,6 @@ async function callInterview(){
     var aiDiv=box.lastElementChild&&box.lastElementChild.querySelector(".msg-ai-b");
     if(aiDiv)aiDiv.textContent="连接失败："+e.message;
     setButtons(false);busying=false;
-    isEnding=false;
   }
 }
 
@@ -534,8 +540,10 @@ function finishInterview(text){
 }
 
 function confirmExit(){
-  if(busying)return;
-  showMask("面试还没完成","退出后本次不保存。确定退出吗？",function(){inInterview=false;go("p-home")});
+  showMask("面试还没完成","退出后本次不保存。确定退出吗？",function(){
+    inInterview=false;busying=false;isEnding=false;
+    go("p-home")
+  });
 }
 
 /* ========== 面试记录 ========== */
