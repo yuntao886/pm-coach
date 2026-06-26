@@ -266,6 +266,7 @@ var busying=false;
 var interviewId="";
 var interviewRecord=null;
 var typewriterTimer=null;
+var isEnding=false;
 
 /* ========== 粒子背景 ========== */
 (function(){var c=document.getElementById("bg"),x=c.getContext("2d");var w,h,ps=[];
@@ -371,7 +372,7 @@ async function submitIntro(){
 }
 
 async function startInterview(initMsg){
-  go("p-mock");inInterview=true;
+  go("p-mock");inInterview=true;isEnding=false;
   interviewId=Date.now()+"";
   interviewRecord={id:interviewId,time:new Date().toLocaleString(),resume:resumeText,match:matchResult,total:questionTotal,questions:[],summary:""};
   var box=document.getElementById("chat-box");box.innerHTML="";
@@ -380,17 +381,22 @@ async function startInterview(initMsg){
   addAIMsg("",true);
   busying=true;setButtons(true);
   try{
-    var r=await fetch(API_URL,{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({type:"interview",messages:chatHistory})});
+    var fetchPromise=fetch(API_URL,{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({type:"interview",messages:chatHistory})});
+    var timeoutPromise=new Promise(function(r){setTimeout(function(){r({timeout:true})},25000)});
+    var raceResult=await Promise.race([fetchPromise,timeoutPromise]);
+    if(raceResult.timeout){throw new Error("请求超时，AI响应太慢")}
+    var r=raceResult;
     var d=await r.json();
     var text=d.text||"（无响应）";
-    await typewrite(box.lastElementChild.querySelector(".msg-ai-b"),text);
+    var aiDiv=box.lastElementChild&&box.lastElementChild.querySelector(".msg-ai-b");
+    if(aiDiv){aiDiv.textContent=text;aiDiv.style.color="#e8e8f0";aiDiv.classList.remove("loading")}
     chatHistory.push({role:"assistant",content:text});
     questionIndex=1;
     updateQStatus();
     setButtons(false);
     busying=false;
   }catch(e){
-    var aiDiv=box.lastElementChild.querySelector(".msg-ai-b");
+    var aiDiv=box.lastElementChild&&box.lastElementChild.querySelector(".msg-ai-b");
     if(aiDiv)aiDiv.textContent="连接失败："+e.message;
     busying=false;setButtons(false);
   }
@@ -469,7 +475,8 @@ function confirmEnd(){
 
 async function endInterview(){
   closeMask();
-  addUserMsg("[结束面试]");chatHistory.push({role:"user",content:"[指令] 面试结束，请给出本次面试的总评报告，包含：1.整体表现评分(A+/A/B+/B/C) 2.各维度表现点评 3.2-3条具体改进建议 4.针对简历的优化建议"});
+  isEnding=true;
+  addUserMsg("[结束面试]");chatHistory.push({role:"user",content:"[指令] 面试结束，请给出本次面试的总评报告，包含：1.整体表现评分 2.各维度点评 3.改进建议 4.简历优化"});
   setButtons(true);busying=true;
   addAIMsg("",true);
   await callInterview();
@@ -477,37 +484,53 @@ async function endInterview(){
 
 async function callInterview(){
   var box=document.getElementById("chat-box");
-  var aiDiv=box.lastElementChild.querySelector(".msg-ai-b");
   try{
-    var r=await fetch(API_URL,{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({type:"interview",messages:chatHistory})});
+    var fetchPromise=fetch(API_URL,{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({type:"interview",messages:chatHistory})});
+    var timeoutPromise=new Promise(function(r){setTimeout(function(){r({timeout:true})},25000)});
+    var raceResult=await Promise.race([fetchPromise,timeoutPromise]);
+    if(raceResult.timeout){throw new Error("请求超时，AI响应太慢")}
+    var r=raceResult;
     var d=await r.json();
     var text=d.text||"（无响应）";
-    await typewrite(aiDiv,text);
+    var aiDiv=box.lastElementChild&&box.lastElementChild.querySelector(".msg-ai-b");
+    if(aiDiv){aiDiv.textContent=text;aiDiv.style.color="#e8e8f0";aiDiv.classList.remove("loading")}
     chatHistory.push({role:"assistant",content:text});
+
+    if(isEnding){
+      isEnding=false;
+      finishInterview(text);
+      return;
+    }
 
     questionIndex++;
     updateQStatus();
 
-    if(questionIndex>questionTotal){
-      interviewRecord.summary=text;
-      interviewRecord.questions=chatHistory.slice();
-      saveRecord(interviewRecord);
-      mockCount++;localStorage.setItem("pc_mc",mockCount);
-      updateHome();
-      inInterview=false;busying=false;
-      setTimeout(function(){
-        showMask("面试完成 ✅","本次面试已保存到面试记录。",function(){go("p-home")},"查看记录","回首页");
-        document.getElementById("mask-ok").onclick=function(){closeMask();go("p-history")};
-        document.getElementById("mask-cancel").onclick=function(){closeMask();go("p-home")};
-      },500);
+    if(questionIndex>=questionTotal){
+      finishInterview(text);
       return;
     }
 
     setButtons(false);busying=false;
   }catch(e){
+    var aiDiv=box.lastElementChild&&box.lastElementChild.querySelector(".msg-ai-b");
     if(aiDiv)aiDiv.textContent="连接失败："+e.message;
     setButtons(false);busying=false;
+    isEnding=false;
   }
+}
+
+function finishInterview(text){
+  interviewRecord.summary=text;
+  interviewRecord.questions=chatHistory.slice();
+  saveRecord(interviewRecord);
+  mockCount++;localStorage.setItem("pc_mc",mockCount);
+  updateHome();
+  inInterview=false;busying=false;
+  setTimeout(function(){
+    showMask("面试完成 ✅","本次面试已保存到面试记录。",function(){go("p-home")},"查看记录","回首页");
+    document.getElementById("mask-ok").onclick=function(){closeMask();go("p-history")};
+    document.getElementById("mask-cancel").onclick=function(){closeMask();go("p-home")};
+  },500);
 }
 
 function confirmExit(){
