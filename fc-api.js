@@ -2,11 +2,11 @@
 
 const https = require('https');
 
-// 四个智能体的App ID
-const RESUME_APP_ID = '4c72d1a7b9ca42f78428cf8836b355ef';   // 简历分析
-const INTERVIEW_APP_ID = '76a51d9b50a0497ab0f5c753fb0d9a3d'; // 面试对话
-const REFERENCE_APP_ID = '请替换为参考答案Agent的AppID';        // ← 创建后替换
-const OPTIMIZE_APP_ID = '请替换为简历优化Agent的AppID';        // ← 创建后替换
+// 四智能体App ID
+const RESUME_APP_ID = '4c72d1a7b9ca42f78428cf8836b355ef';       // 简历分析
+const INTERVIEW_APP_ID = '76a51d9b50a0497ab0f5c753fb0d9a3d';     // 面试对话
+const OPTIMIZE_APP_ID = '16885e3cef5b47faa22cfb38bbd95286';       // 简历优化
+const REFERENCE_APP_ID = '1ed1a741b1ab4912afd55d7bc16d2fd1';       // 参考答案
 const API_KEY = 'sk-ws-H.RPPMMLP.CLts.MEUCIAhjyUzh3NiGKcgeaDzlenO4SypPEP0aCjWsOVh40UAFAiEA_9Oe38OS4jWXr1e760LZku-JTFgu81MrQ9zFlzd8Hx4';
 
 function callBailian(appId, messages) {
@@ -71,41 +71,84 @@ exports.handler = async function(event, context, callback) {
     }
 
     if (method !== 'POST') {
-      callback(null, build(200, { status: 'ok', info: 'PM面试教练API' }));
+      callback(null, build(200, { status: 'ok' }));
       return;
     }
 
     var bodyStr = raw.body || '{}';
     if (raw.isBase64Encoded) bodyStr = Buffer.from(bodyStr, 'base64').toString('utf-8');
     var body = JSON.parse(bodyStr);
+    var msgs = body.messages || [];
 
-    // 路由：根据type分流到不同智能体
+    // ──── 简历分析 + 同步预优化 ────
     if (body.type === 'resume') {
-      // 简历分析
-      var data = await callBailian(RESUME_APP_ID, body.messages);
-      callback(null, build(200, { text: extractText(data) }));
-
-    } else if (body.type === 'skip') {
-      // 跳过：先拿参考答案，再接下一题
-      var refData = await callBailian(REFERENCE_APP_ID, body.messages);
-      var refText = extractText(refData);
-      // 把参考答案注入对话，再向面试Agent要下一题
-      var nextMsg = [{ role: 'assistant', content: refText }, { role: 'user', content: '[指令] 请出下一题（不重复刚才的维度）' }];
-      var fullMsgs = (body.messages || []).concat(nextMsg);
-      var intData = await callBailian(INTERVIEW_APP_ID, fullMsgs);
-      var intText = extractText(intData);
-      callback(null, build(200, { text: refText + '\n\n' + intText, session_id: (intData.output && intData.output.session_id) || '' }));
-
-    } else if (body.type === 'optimize') {
-      // 简历优化
-      var optData = await callBailian(OPTIMIZE_APP_ID, body.messages);
-      callback(null, build(200, { text: extractText(optData) }));
-
-    } else {
-      // 默认：面试对话
-      var intData = await callBailian(INTERVIEW_APP_ID, body.messages);
-      callback(null, build(200, { text: extractText(intData), session_id: (intData.output && intData.output.session_id) || '' }));
+      var resumeData = await callBailian(RESUME_APP_ID, msgs);
+      var resumeText = extractText(resumeData);
+      // 同时调优化Agent，把优化结果一起返回，前端存起来面试结束直接用
+      var optData = await callBailian(OPTIMIZE_APP_ID, [
+        { role: 'user', content: '请优化以下简历：\n' + (body.resumeRaw || '') }
+      ]);
+      callback(null, build(200, {
+        text: resumeText,
+        optimized: extractText(optData),
+      }));
+      return;
     }
+
+    // ──── 面试对话（每轮自动附参考答案） ────
+    if (body.type === 'interview') {
+      var intData = await callBailian(INTERVIEW_APP_ID, msgs);
+      var intText = extractText(intData);
+      // 拿最后一轮题目去调参考答案Agent
+      var lastQ = msgs.filter(function(m) { return m.role === 'assistant'; }).slice(-1)[0];
+      var refText = '';
+      if (lastQ) {
+        try {
+          var refData = await callBailian(REFERENCE_APP_ID, [
+            { role: 'user', content: '请为以下面试题提供参考答案：\n' + lastQ.content }
+          ]);
+          refText = extractText(refData);
+        } catch (e) { /* 参考答案Agent失败不影响主流程 */ }
+      }
+      var combined = intText;
+      if (refText) combined += '\n\n' + refText;
+      callback(null, build(200, {
+        text: combined,
+        session_id: (intData.output && intData.output.session_id) || '',
+      }));
+      return;
+    }
+
+    // ──── 跳过：参考答案 + 下一题 ────
+    if (body.type === 'skip') {
+      var refData = await callBailian(REFERENCE_APP_ID, msgs);
+      var refText = extractText(refData);
+      var nextMsgs = msgs.concat([
+        { role: 'assistant', content: refText },
+        { role: 'user', content: '[指令] 请出下一题（不重复刚才的维度）' }
+      ]);
+      var intData2 = await callBailian(INTERVIEW_APP_ID, nextMsgs);
+      var intText2 = extractText(intData2);
+      callback(null, build(200, { text: refText + '\n\n' + intText2 }));
+      return;
+    }
+
+    // ──── 简历优化 ────
+    if (body.type === 'optimize') {
+      var oData = await callBailian(OPTIMIZE_APP_ID, msgs);
+      callback(null, build(200, { text: extractText(oData) }));
+      return;
+    }
+
+    // ──── 纯参考答案 ────
+    if (body.type === 'reference') {
+      var rData = await callBailian(REFERENCE_APP_ID, msgs);
+      callback(null, build(200, { text: extractText(rData) }));
+      return;
+    }
+
+    // 默认
+    callback(null, build(200, { text: '' }));
   } catch (e) {
     callback(null, build(500, { error: e.message }));
   }

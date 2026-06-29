@@ -257,6 +257,7 @@ var PMS=["AI产品","B端","C端","增长","商业化","策略","数据","平台
 var mockCount=parseInt(localStorage.getItem("pc_mc")||"0");
 var resumeText=localStorage.getItem("pc_resume")||"";
 var matchResult="";
+var optimizedResume="";
 var chatHistory=[];
 var inInterview=false;
 var selectedPm="";
@@ -327,9 +328,10 @@ async function submitResume(){
   var btn=document.getElementById("resume-btn");btn.disabled=true;btn.textContent="⏳ 分析中……";
   showLoading("AI正在分析你的简历……");
   try{
-    var r=await fetch(API_URL,{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({type:"resume",messages:[{role:"user",content:"[简历] "+text}]})});
+    var r=await fetch(API_URL,{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({type:"resume",messages:[{role:"user",content:"[简历] "+text}],resumeRaw:text})});
     var d=await r.json();
     matchResult=d.text||("⚠️ 解析失败："+JSON.stringify(d,null,2));
+    optimizedResume=d.optimized||"";
     document.getElementById("match-out").textContent=matchResult;
     hideLoading();
     go("p-result");
@@ -369,6 +371,7 @@ function startMock(){
 async function submitIntro(){
   var text=document.getElementById("intro-inp").value.trim();if(!text)return;
   var btn=document.getElementById("intro-btn");btn.disabled=true;btn.textContent="⏳";
+  optimizedResume=""; /* 自我介绍路径不给优化简历 */
   var initMsg=matchResult?("[匹配结果] "+matchResult+"\n[自我介绍] "+text):("[自我介绍] "+text);
   initMsg+="\n[指令] 本次面试共"+questionTotal+"道题，请逐题提问。";
   await startInterview(initMsg);
@@ -623,6 +626,12 @@ function finishInterview(text){
   updateHome();
   inInterview=false;busying=false;isFormal=false;
   var box=document.getElementById("chat-box");
+  /* 如果有预优化的简历（简历入口），直接注入，无加载时间 */
+  if(optimizedResume){
+    var optDiv=document.createElement("div");optDiv.className="msg-ai";
+    optDiv.innerHTML='<div class="msg-ai-a">📄</div><div class="msg-ai-b" style="white-space:pre-wrap;line-height:1.7">'+escapeHTML(optimizedResume)+'</div>';
+    box.appendChild(optDiv);
+  }
   var d=document.createElement("div");d.className="msg-ai";d.style.justifyContent="center";
   d.innerHTML='<button class="btn btn-pri" style="width:auto;padding:12px 32px" onclick="forceHome()">🏠 返回首页</button>';
   box.appendChild(d);box.scrollTop=box.scrollHeight;
