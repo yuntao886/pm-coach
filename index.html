@@ -592,16 +592,15 @@ async function callInterview(){
     }
     chatHistory.push({role:"assistant",content:text});
 
-    if(!skipFlag&&(text.indexOf("[下一题]")>=0||text.indexOf("[出题]")>=0||text.indexOf("第"+(questionIndex+1)+"题")>=0||text.indexOf("Q"+(questionIndex+1))>=0)){
+    if(!skipFlag&&(text.indexOf("[下一题]")>=0||text.indexOf("【下一题】")>=0||text.indexOf("[出题]")>=0||text.indexOf("第"+(questionIndex+1)+"题")>=0||text.indexOf("Q"+(questionIndex+1))>=0)){
       questionIndex++;
       updateQStatus();
     }
     skipFlag=false;
 
     if(questionIndex>=questionTotal&&!isEnding){
-      /* 最后一题刚被AI发出(含[下一题]标记)? 让用户回答, 不结束 */
-      /* 用户回答完后AI给反馈结束语(不含[下一题]), 那时才结束 */
-      if(text.indexOf("[下一题]")<0&&text.indexOf("[出题]")<0){
+      /* 有下一题标记=AI刚发了最后一题，让用户答；没有=答完了结束 */
+      if(text.indexOf("[下一题]")<0&&text.indexOf("【下一题】")<0&&text.indexOf("[出题]")<0&&text.indexOf("第"+(questionIndex+1)+"题")<0){
         finishInterview(text);
         return;
       }

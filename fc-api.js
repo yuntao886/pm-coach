@@ -86,7 +86,7 @@ exports.handler = async function(event, context, callback) {
       var resumeText = extractText(resumeData);
       // 同时调优化Agent，把优化结果一起返回，前端存起来面试结束直接用
       var optData = await callBailian(OPTIMIZE_APP_ID, [
-        { role: 'user', content: '请优化以下简历：\n' + (body.resumeRaw || '') }
+        { role: 'user', content: '请基于以下简历和面试信息，生成一份完整的优化简历（Word文档格式），包含个人信息、一句话定位、项目经历、技能标签、面试表现亮点：\n\n原始简历：\n' + (body.resumeRaw || '') + '\n\n简历分析：\n' + resumeText }
       ]);
       callback(null, build(200, {
         text: resumeText,
@@ -99,17 +99,15 @@ exports.handler = async function(event, context, callback) {
     if (body.type === 'interview') {
       var intData = await callBailian(INTERVIEW_APP_ID, msgs);
       var intText = extractText(intData);
-      // 拿最后一轮题目去调参考答案Agent
-      var lastQ = msgs.filter(function(m) { return m.role === 'assistant'; }).slice(-1)[0];
+      // 参考答案Agent拿全量上下文，只答当前题，不出下一题
+      var refCtx = JSON.stringify(msgs.map(function(m){return m.role+":"+m.content}));
       var refText = '';
-      if (lastQ) {
-        try {
-          var refData = await callBailian(REFERENCE_APP_ID, [
-            { role: 'user', content: '请为以下面试题提供参考答案：\n' + lastQ.content }
-          ]);
-          refText = extractText(refData);
-        } catch (e) { /* 参考答案Agent失败不影响主流程 */ }
-      }
+      try {
+        var refData = await callBailian(REFERENCE_APP_ID, [
+          { role: 'user', content: '以下是完整面试对话。请为其中最新一道面试题提供详细参考答案（只答这道题，不出下一题）：\n'+refCtx }
+        ]);
+        refText = extractText(refData);
+      } catch (e) { /* 参考答案Agent失败不影响主流程 */ }
       var combined = intText;
       if (refText) combined += '\n\n' + refText;
       callback(null, build(200, {
