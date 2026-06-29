@@ -487,6 +487,9 @@ function escapeHTML(s){return s.replace(/&/g,"&amp;").replace(/</g,"&lt;").repla
 function renderMsg(text){
   /* 过滤掉流程控制标记（前端自主推进，不再显示给用户） */
   text=text.replace(/【下一题】|\[下一题\]|【面试结束】|\[面试结束\]/g,"").trim();
+  /* 过滤掉 Agent 误输出的简历分析块（用户已在简历页看过） */
+  text=text.replace(/\[匹配结果\][\s\S]*?(?=\[简历原文\]|📋|\n第\d+题|\n【参考答案】|$)/,"").trim();
+  text=text.replace(/\[简历原文\][\s\S]*?(?=📋|\n第\d+题|\n【参考答案】|$)/,"").trim();
   /* 把【参考答案】xxx 渲染为折叠页 */
   var html=escapeHTML(text);
   var refPattern=/【参考答案】([\s\S]*?)(?=\n\n|\n\[|\n【|$)/g;
