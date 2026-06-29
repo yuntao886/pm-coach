@@ -459,18 +459,19 @@ function addUserMsg(text){
 function escapeHTML(s){return s.replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;")}
 
 function renderMsg(text){
-  /* 把【参考答案】xxx 或 [参考答案]xxx 渲染为折叠页 */
+  /* 把【参考答案汇总】或【参考答案】渲染为折叠页 */
   var html=escapeHTML(text);
-  var refPattern=/【参考答案】([\s\S]*?)(?=\n\n|\n\[|$)/g;
+  /* 优先匹配汇总格式 */
+  var refPattern=/【参考答案汇总】([\s\S]*)/g;
   var match;
   while((match=refPattern.exec(text))!==null){
     var refContent=escapeHTML(match[1].trim());
     var refId="ref-"+Date.now()+Math.random().toString(36).substr(2,4);
-    var refBlock='<div class="ref-box" id="'+refId+'"><div class="ref-head" onclick="this.parentElement.classList.toggle(\'open\')"><span>📖 参考答案（点击展开）</span><span class="ref-arrow">▶</span></div><div class="ref-body">'+refContent+'</div></div>';
+    var refBlock='<div class="ref-box" id="'+refId+'"><div class="ref-head" onclick="this.parentElement.classList.toggle(\'open\')"><span>📖 全部参考答案（点击展开）</span><span class="ref-arrow">▶</span></div><div class="ref-body">'+refContent+'</div></div>';
     html=html.replace(escapeHTML(match[0]),refBlock);
   }
-  /* 备用：[参考答案]格式 */
-  refPattern=/\[参考答案\]([\s\S]*?)(?=\n\n|\n\[|$)/g;
+  /* 备用：【参考答案】单题格式 */
+  refPattern=/【参考答案】([\s\S]*?)(?=\n\n|\n\[|$)/g;
   while((match=refPattern.exec(text))!==null){
     if(html.indexOf('<div class="ref-box"')>=0)continue;
     var refContent=escapeHTML(match[1].trim());

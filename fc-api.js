@@ -84,7 +84,6 @@ exports.handler = async function(event, context, callback) {
     if (body.type === 'resume') {
       var resumeData = await callBailian(RESUME_APP_ID, msgs);
       var resumeText = extractText(resumeData);
-      // 同时调优化Agent预优化，前端缓存，面试结束0秒注入
       var optData = await callBailian(OPTIMIZE_APP_ID, [
         { role: 'user', content: '请基于以下简历信息，生成一份完整的优化简历（Word文档格式排版），包含个人信息、一句话定位、项目经历、技能标签：\n\n原始简历：\n' + (body.resumeRaw || '') + '\n\n简历分析：\n' + resumeText }
       ]);
@@ -95,23 +94,20 @@ exports.handler = async function(event, context, callback) {
       return;
     }
 
-    // ──── 面试对话（只在题答完时附参考答案） ────
+    // ──── 面试对话（参考答案统一在面试结束时给） ────
     if (body.type === 'interview') {
       var intData = await callBailian(INTERVIEW_APP_ID, msgs);
       var intText = extractText(intData);
 
-      // 只在题答完时调参考答案Agent
-      // 检测【下一题】或【面试结束】标记 = 题已答完
-      var isQuestionDone = intText.indexOf('【下一题】') >= 0 ||
-                           intText.indexOf('[下一题]') >= 0 ||
-                           intText.indexOf('【面试结束】') >= 0;
+      // 只在面试结束时一次调用参考答案Agent，汇总全部题目的答案
+      var isEnd = intText.indexOf('【面试结束】') >= 0 || intText.indexOf('[面试结束]') >= 0;
 
       var refText = '';
-      if (isQuestionDone) {
+      if (isEnd) {
         try {
           var refCtx = JSON.stringify(msgs.map(function(m){return m.role+":"+m.content}));
           var refData = await callBailian(REFERENCE_APP_ID, [
-            { role: 'user', content: '以下是完整面试对话上下文。请为其中最新一道已完成的面试题提供详细参考答案（只答这道题，不出下一题，不评价用户回答）：\n'+refCtx }
+            { role: 'user', content: '以下是完整面试对话上下文。面试已结束，请为对话中出现的所有面试题逐一提供详细参考答案。每道题分开标题，按出现顺序排列，用【参考答案汇总】包裹全部：\n'+refCtx }
           ]);
           refText = extractText(refData);
         } catch (e) { /* 参考答案Agent失败不影响主流程 */ }
@@ -126,26 +122,12 @@ exports.handler = async function(event, context, callback) {
       return;
     }
 
-    // ──── 跳过：直接调面试Agent处理跳过，然后附参考答案 ────
+    // ──── 跳过：直接调面试Agent处理跳过（不单独给参考答案，等结束时统一汇总） ────
     if (body.type === 'skip') {
-      // 跳过 = 此题结束，面试Agent按提示词处理跳过+出下一题
       var intData = await callBailian(INTERVIEW_APP_ID, msgs);
       var intText = extractText(intData);
-
-      // 跳过必然算题答完，总是附参考答案（为被跳过的题目）
-      var refText = '';
-      try {
-        var refCtx = JSON.stringify(msgs.map(function(m){return m.role+":"+m.content}));
-        var refData = await callBailian(REFERENCE_APP_ID, [
-          { role: 'user', content: '以下是完整面试对话上下文。用户跳过了最近一道面试题。请为该被跳过的面试题提供详细参考答案（只答这道题，不出下一题）：\n'+refCtx }
-        ]);
-        refText = extractText(refData);
-      } catch (e) { /* 参考答案Agent失败不影响主流程 */ }
-
-      var combined = intText;
-      if (refText) combined += '\n\n' + refText;
       callback(null, build(200, {
-        text: combined,
+        text: intText,
         session_id: (intData.output && intData.output.session_id) || '',
       }));
       return;
