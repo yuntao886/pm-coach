@@ -165,6 +165,17 @@ exports.handler = async function(event, context, callback) {
       return;
     }
 
+    // ──── 埋点 ────
+    if (body.type === 'track') {
+      var ev = body.event || 'unknown';
+      var ts = body.timestamp || Date.now();
+      var sid = body.session_id || '-';
+      var info = JSON.stringify(body.data || {});
+      console.log('[track]', ts, ev, sid, info);
+      callback(null, build(200, { status: 'tracked' }));
+      return;
+    }
+
     callback(null, build(200, { status: 'unknown_type' }));
   } catch (e) {
     callback(null, build(500, { error: e.message || 'unknown error' }));

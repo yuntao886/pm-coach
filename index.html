@@ -332,6 +332,7 @@ async function submitResume(){
     var d=await r.json();
     matchResult=d.text||("⚠️ 解析失败："+JSON.stringify(d,null,2));
     optimizedResume=d.optimized||"";
+    sendTrack("resume_analysis_done",{hasOptimized:!!optimizedResume});
     document.getElementById("match-out").textContent=matchResult;
     hideLoading();
     go("p-result");
@@ -407,6 +408,7 @@ async function startInterview(initMsg){
     updateQStatus();
     setButtons(false);
     busying=false;
+    sendTrack("interview_start",{total:questionTotal,isFormal:isFormal});
     if(isFormal)startCountdown();
   }catch(e){
     var aiDiv=box.lastElementChild&&box.lastElementChild.querySelector(".msg-ai-b");
@@ -501,6 +503,7 @@ function sendSkip(){
   if(busying)return;
   stopCountdown();
   addUserMsg("[跳过]");
+  sendTrack("question_skipped",{idx:questionIndex,total:questionTotal});
   chatHistory.push({role:"user",content:"[指令] 此题跳过"});
   /* 不提前increment questionIndex，让AI响应的【下一题】标记决定推进 */
   setButtons(true);busying=true;
@@ -531,6 +534,7 @@ async function callInterviewSkip(){
     if(hasNextQ){
       questionIndex++;
       updateQStatus();
+      sendTrack("question_done",{idx:questionIndex,total:questionTotal,via:"skip"});
     }
     skipFlag=false;
 
@@ -601,6 +605,7 @@ async function callInterview(){
     if(hasNextQ){
       questionIndex++;
       updateQStatus();
+      sendTrack("question_done",{idx:questionIndex,total:questionTotal});
     }
     skipFlag=false;
 
@@ -622,6 +627,7 @@ async function callInterview(){
 
 function finishInterview(text){
   stopCountdown();
+  sendTrack("interview_end",{total:questionTotal,completed:questionIndex,isFormal:isFormal,mockCount:mockCount});
   interviewRecord.summary=text;
   interviewRecord.questions=chatHistory.slice();
   saveRecord(interviewRecord);
@@ -644,9 +650,18 @@ function finishInterview(text){
 
 function downloadResume(){
   if(!optimizedResume){alert("暂无优化简历");return}
+  sendTrack("resume_download",{hasResume:!!optimizedResume});
   var blob=new Blob([optimizedResume],{type:"text/plain;charset=utf-8"});
   var a=document.createElement("a");a.href=URL.createObjectURL(blob);a.download="优化简历_PM面试教练.txt";
   document.body.appendChild(a);a.click();document.body.removeChild(a);
+}
+
+/* ========== 埋点 ========== */
+function sendTrack(eventName,data){
+  try{
+    var payload=JSON.stringify({type:"track",event:eventName,timestamp:Date.now(),session_id:interviewId||"-",data:data||{}});
+    navigator.sendBeacon(API_URL,payload);
+  }catch(e){/* 埋点失败不影响主流程 */}
 }
 
 function forceHome(){
