@@ -192,7 +192,7 @@ body{font-family:"PingFang SC","Microsoft YaHei",sans-serif;background:var(--bg)
   <div class="bar bot">
     <div class="voice" onclick="toggleVoice('chat-inp')">🎤</div>
     <input id="chat-inp" class="inp grow" style="height:40px;padding:0 12px;font-size:14px" placeholder="输入你的回答……" onkeydown="if(event.key==='Enter')sendMsg()">
-    <button class="btn btn-pri" style="width:auto;padding:8px 16px;font-size:13px;height:36px" id="next-btn" disabled>发送</button>
+    <button class="btn btn-pri" style="width:auto;padding:8px 16px;font-size:13px;height:36px" id="next-btn" disabled onclick="sendMsg()">发送</button>
     <button class="btn btn-sec" style="width:auto;padding:8px 12px;font-size:13px;height:36px" id="skip-btn" onclick="sendSkip()" disabled>跳过</button>
   </div>
 </div>
