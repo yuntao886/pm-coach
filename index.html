@@ -492,7 +492,10 @@ async function sendMsg(){
 function sendSkip(){
   if(busying)return;
   stopCountdown();
-  addUserMsg("[跳过]");chatHistory.push({role:"user",content:isFormal?"[指令] 跳过":"[指令] 此题跳过，给参考答案并出下一题"});
+  addUserMsg("[跳过]");
+  var cmd=isFormal?"[指令] 跳过":"[指令] 此题跳过，给参考答案并出下一题（跳过维度评C，下一题不重复该维度）";
+  chatHistory.push({role:"user",content:cmd});
+  questionIndex++;skipFlag=true;updateQStatus();
   setButtons(true);busying=true;
   addAIMsg("",true);
   callInterview();
@@ -536,11 +539,12 @@ async function callInterview(){
     if(aiDiv){aiDiv.innerHTML=renderMsg(text);aiDiv.style.color="#e8e8f0";aiDiv.classList.remove("loading")}
     chatHistory.push({role:"assistant",content:text});
 
-    /* AI回复中检测是否推进到下一题 */
-    if(text.indexOf("[下一题]")>=0||text.indexOf("[出题]")>=0||text.indexOf("第"+(questionIndex+1)+"题")>=0||text.indexOf("Q"+(questionIndex+1))>=0){
+    /* AI回复中检测是否推进到下一题（跳过模式前端已推进，防止重复） */
+    if(!skipFlag&&(text.indexOf("[下一题]")>=0||text.indexOf("[出题]")>=0||text.indexOf("第"+(questionIndex+1)+"题")>=0||text.indexOf("Q"+(questionIndex+1))>=0)){
       questionIndex++;
       updateQStatus();
     }
+    skipFlag=false;
 
     if(questionIndex>=questionTotal&&!isEnding){
       finishInterview(text);
