@@ -6,7 +6,7 @@ const https = require('https');
 const RESUME_APP_ID = '4c72d1a7b9ca42f78428cf8836b355ef';       // 简历分析
 const INTERVIEW_APP_ID = '76a51d9b50a0497ab0f5c753fb0d9a3d';     // 面试对话
 const OPTIMIZE_APP_ID = '16885e3cef5b47faa22cfb38bbd95286';       // 简历优化
-const REFERENCE_APP_ID = '1ed1a741b1ab4912afd55d7bc16d2fd1';       // 参考答案
+const REFERENCE_APP_ID = '1ed1a741b1ab4912afd55d7bc16d2fd1';       // 参考答案（保留，暂不启用）
 const API_KEY = 'sk-ws-H.RPPMMLP.CLts.MEUCIAhjyUzh3NiGKcgeaDzlenO4SypPEP0aCjWsOVh40UAFAiEA_9Oe38OS4jWXr1e760LZku-JTFgu81MrQ9zFlzd8Hx4';
 
 function callBailian(appId, messages) {
@@ -94,53 +94,21 @@ exports.handler = async function(event, context, callback) {
       return;
     }
 
-    // ──── 面试对话（用户答题后附参考答案） ────
+    // ──── 面试对话（Agent自行输出参考答案，后端纯透传） ────
     if (body.type === 'interview') {
       var intData = await callBailian(INTERVIEW_APP_ID, msgs);
-      var intText = extractText(intData);
-
-      // 用户已答题时附参考答案（由前端 isUserAnswer 标记控制，不再依赖 AI 回复中的【下一题】文本）
-      var isUserAnswer = body.isUserAnswer === true;
-
-      var refText = '';
-      if (isUserAnswer) {
-        try {
-          var refCtx = JSON.stringify(msgs.map(function(m){return m.role+":"+m.content}));
-          var refData = await callBailian(REFERENCE_APP_ID, [
-            { role: 'user', content: '以下是完整面试对话上下文。请为最近一道已完成的面试题提供详细参考答案（只答这道题，不出下一题）：\n'+refCtx }
-          ]);
-          refText = extractText(refData);
-        } catch (e) { /* 参考答案Agent失败不影响主流程 */ }
-      }
-
-      var combined = intText;
-      if (refText) combined += '\n\n' + refText;
       callback(null, build(200, {
-        text: combined,
+        text: extractText(intData),
         session_id: (intData.output && intData.output.session_id) || '',
       }));
       return;
     }
 
-    // ──── 跳过（附参考答案，同样每题都给） ────
+    // ──── 跳过（Agent自行输出参考答案，后端纯透传） ────
     if (body.type === 'skip') {
       var intData = await callBailian(INTERVIEW_APP_ID, msgs);
-      var intText = extractText(intData);
-
-      // 跳过 = 题被跳过但算完成，附参考答案
-      var refText = '';
-      try {
-        var refCtx = JSON.stringify(msgs.map(function(m){return m.role+":"+m.content}));
-        var refData = await callBailian(REFERENCE_APP_ID, [
-          { role: 'user', content: '以下是完整面试对话上下文。用户跳过了最近一道面试题。请为该被跳过的题提供详细参考答案（只答这道题）：\n'+refCtx }
-        ]);
-        refText = extractText(refData);
-      } catch (e) { /* 参考答案Agent失败不影响主流程 */ }
-
-      var combined = intText;
-      if (refText) combined += '\n\n' + refText;
       callback(null, build(200, {
-        text: combined,
+        text: extractText(intData),
         session_id: (intData.output && intData.output.session_id) || '',
       }));
       return;
