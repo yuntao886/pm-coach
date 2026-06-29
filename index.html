@@ -498,12 +498,50 @@ function sendSkip(){
   if(busying)return;
   stopCountdown();
   addUserMsg("[跳过]");
-  var cmd=isFormal?"[指令] 跳过":"[指令] 此题跳过，给参考答案并出下一题（跳过维度评C，下一题不重复该维度）";
-  chatHistory.push({role:"user",content:cmd});
+  /* 把当前题目发给参考答案Agent */
+  var lastQ=chatHistory.filter(function(m){return m.role==="assistant"}).slice(-1)[0];
+  var skipMsg="请为以下面试题提供参考答案：\n"+(lastQ?lastQ.content:"");
+  chatHistory.push({role:"user",content:"[指令] 此题跳过"});
   questionIndex++;skipFlag=true;updateQStatus();
   setButtons(true);busying=true;
   addAIMsg("",true);
-  callInterview();
+  callInterviewSkip(skipMsg);
+}
+
+async function callInterviewSkip(skipMsg){
+  var box=document.getElementById("chat-box");
+  try{
+    /* 调skip接口：FC会先调参考答案Agent再调面试Agent出下一题 */
+    var r=await fetch(API_URL,{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({type:"skip",messages:chatHistory})});
+    if(!r.ok)throw new Error("HTTP "+r.status);
+    var d=await r.json();
+    var text=d.text||"（无响应）";
+    console.log("[skip] received",text.length,"chars");
+    var aiDiv=box.lastElementChild&&box.lastElementChild.querySelector(".msg-ai-b");
+    if(aiDiv){
+      try{aiDiv.innerHTML=renderMsg(text)}catch(er){console.error("[renderMsg]",er);aiDiv.textContent=text}
+      aiDiv.style.color="#e8e8f0";aiDiv.classList.remove("loading")
+    }
+    chatHistory.push({role:"assistant",content:text});
+    if(text.indexOf("[下一题]")>=0||text.indexOf("第"+(questionIndex+1)+"题")>=0){
+      skipFlag=false;
+    }else{
+      questionIndex++;
+      updateQStatus();
+    }
+    skipFlag=false;
+    if(questionIndex>=questionTotal&&!isEnding&&text.indexOf("[下一题]")<0){
+      finishInterview(text);
+      return;
+    }
+    setButtons(false);busying=false;
+    if(isFormal&&questionIndex<questionTotal)startCountdown();
+  }catch(e){
+    console.error("[skip error]",e.message||e);
+    var aiDiv=box.lastElementChild&&box.lastElementChild.querySelector(".msg-ai-b");
+    if(aiDiv)aiDiv.textContent="连接失败："+(e.message||e);
+    setButtons(false);busying=false;
+  }
 }
 
 function confirmEnd(){
@@ -558,8 +596,12 @@ async function callInterview(){
     skipFlag=false;
 
     if(questionIndex>=questionTotal&&!isEnding){
-      finishInterview(text);
-      return;
+      /* 最后一题刚被AI发出(含[下一题]标记)? 让用户回答, 不结束 */
+      /* 用户回答完后AI给反馈结束语(不含[下一题]), 那时才结束 */
+      if(text.indexOf("[下一题]")<0&&text.indexOf("[出题]")<0){
+        finishInterview(text);
+        return;
+      }
     }
 
     setButtons(false);busying=false;
