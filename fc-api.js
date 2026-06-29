@@ -94,20 +94,21 @@ exports.handler = async function(event, context, callback) {
       return;
     }
 
-    // ──── 面试对话（参考答案统一在面试结束时给） ────
+    // ──── 面试对话（每道题答完后附参考答案） ────
     if (body.type === 'interview') {
       var intData = await callBailian(INTERVIEW_APP_ID, msgs);
       var intText = extractText(intData);
 
-      // 只在面试结束时一次调用参考答案Agent，汇总全部题目的答案
-      var isEnd = intText.indexOf('【面试结束】') >= 0 || intText.indexOf('[面试结束]') >= 0;
+      // 题答完（【下一题】）或面试结束（【面试结束】）时附参考答案
+      var isDone = intText.indexOf('【下一题】') >= 0 || intText.indexOf('[下一题]') >= 0 ||
+                   intText.indexOf('【面试结束】') >= 0 || intText.indexOf('[面试结束]') >= 0;
 
       var refText = '';
-      if (isEnd) {
+      if (isDone) {
         try {
           var refCtx = JSON.stringify(msgs.map(function(m){return m.role+":"+m.content}));
           var refData = await callBailian(REFERENCE_APP_ID, [
-            { role: 'user', content: '以下是完整面试对话上下文。面试已结束，请为对话中出现的所有面试题逐一提供详细参考答案。每道题分开标题，按出现顺序排列，用【参考答案汇总】包裹全部：\n'+refCtx }
+            { role: 'user', content: '以下是完整面试对话上下文。请为最近一道已完成的面试题提供详细参考答案（只答这道题，不出下一题）：\n'+refCtx }
           ]);
           refText = extractText(refData);
         } catch (e) { /* 参考答案Agent失败不影响主流程 */ }
@@ -122,12 +123,25 @@ exports.handler = async function(event, context, callback) {
       return;
     }
 
-    // ──── 跳过：直接调面试Agent处理跳过（不单独给参考答案，等结束时统一汇总） ────
+    // ──── 跳过（附参考答案，同样每题都给） ────
     if (body.type === 'skip') {
       var intData = await callBailian(INTERVIEW_APP_ID, msgs);
       var intText = extractText(intData);
+
+      // 跳过 = 题被跳过但算完成，附参考答案
+      var refText = '';
+      try {
+        var refCtx = JSON.stringify(msgs.map(function(m){return m.role+":"+m.content}));
+        var refData = await callBailian(REFERENCE_APP_ID, [
+          { role: 'user', content: '以下是完整面试对话上下文。用户跳过了最近一道面试题。请为该被跳过的题提供详细参考答案（只答这道题）：\n'+refCtx }
+        ]);
+        refText = extractText(refData);
+      } catch (e) { /* 参考答案Agent失败不影响主流程 */ }
+
+      var combined = intText;
+      if (refText) combined += '\n\n' + refText;
       callback(null, build(200, {
-        text: intText,
+        text: combined,
         session_id: (intData.output && intData.output.session_id) || '',
       }));
       return;
