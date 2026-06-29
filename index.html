@@ -415,7 +415,7 @@ async function startInterview(initMsg){
   document.getElementById("mock-title").textContent=isFormal?("正式面试 · "+selectedPm):"模拟面试";
   if(isFormal)startCountdown();
   try{
-    var fetchPromise=fetch(API_URL,{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({type:"interview",messages:chatHistory,firstQuestion:true})});
+    var fetchPromise=fetch(API_URL,{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({type:"interview",messages:chatHistory})});
     var timeoutPromise=new Promise(function(r){setTimeout(function(){r({timeout:true})},45000)});
     var raceResult=await Promise.race([fetchPromise,timeoutPromise]);
     if(raceResult.timeout){throw new Error("请求超时(45秒)，AI响应太慢")}
@@ -485,6 +485,8 @@ function addUserMsg(text){
 function escapeHTML(s){return s.replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;")}
 
 function renderMsg(text){
+  /* 过滤掉流程控制标记（前端自主推进，不再显示给用户） */
+  text=text.replace(/【下一题】|\[下一题\]|【面试结束】|\[面试结束\]/g,"").trim();
   /* 把【参考答案】xxx 渲染为折叠页 */
   var html=escapeHTML(text);
   var refPattern=/【参考答案】([\s\S]*?)(?=\n\n|\n\[|\n【|$)/g;
@@ -511,7 +513,14 @@ async function sendMsg(){
   if(busying)return;
   stopCountdown();
   var inp=document.getElementById("chat-inp");var text=inp.value.trim();if(!text)return;
-  addUserMsg(text);chatHistory.push({role:"user",content:text});inp.value="";
+  inp.value="";
+  questionIndex++;
+  updateQStatus();
+  /* 答完最后一道题 → 结束面试 */
+  if(questionIndex>questionTotal){endInterviewWithAnswer(text);return}
+  /* 回答当前题，指令AI点评并出下一题 */
+  var msg="[回答] "+text+" [指令] 请点评第"+(questionIndex-1)+"题并出第"+questionIndex+"题";
+  addUserMsg(text);chatHistory.push({role:"user",content:msg});
   setButtons(true);busying=true;
   addAIMsg("",true);
   await callInterview();
@@ -522,8 +531,12 @@ function sendSkip(){
   stopCountdown();
   addUserMsg("[跳过]");
   sendTrack("question_skipped",{idx:questionIndex,total:questionTotal});
-  chatHistory.push({role:"user",content:"[指令] 此题跳过"});
-  /* 不提前increment questionIndex，让AI响应的【下一题】标记决定推进 */
+  questionIndex++;
+  updateQStatus();
+  /* 跳过最后一道题 → 结束面试 */
+  if(questionIndex>questionTotal){endInterviewWithSkip();return}
+  /* 跳过当前题，指令AI给参考答案并出下一题 */
+  chatHistory.push({role:"user",content:"[指令] 跳过第"+(questionIndex-1)+"题，请给出参考答案后出第"+questionIndex+"题，不要重复此题"});
   setButtons(true);busying=true;
   addAIMsg("",true);
   callInterviewSkip();
@@ -532,7 +545,6 @@ function sendSkip(){
 async function callInterviewSkip(){
   var box=document.getElementById("chat-box");
   try{
-    /* 调skip接口：FC调面试Agent处理跳过+附参考答案 */
     var r=await fetch(API_URL,{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({type:"skip",messages:chatHistory})});
     if(!r.ok)throw new Error("HTTP "+r.status);
     var d=await r.json();
@@ -544,36 +556,51 @@ async function callInterviewSkip(){
       aiDiv.style.color="#e8e8f0";aiDiv.classList.remove("loading")
     }
     chatHistory.push({role:"assistant",content:text});
-
-    /* 流程推进由AI标记驱动，与callInterview一致 */
-    var hasNextQ=text.indexOf("【下一题】")>=0||text.indexOf("[下一题]")>=0;
-    var hasEnd=text.indexOf("【面试结束】")>=0||text.indexOf("[面试结束]")>=0;
-
-    if(hasNextQ){
-      questionIndex++;
-      updateQStatus();
-      sendTrack("question_done",{idx:questionIndex,total:questionTotal,via:"skip"});
-    }
     skipFlag=false;
-
-    if(hasEnd&&!isEnding){
-      finishInterview(text);
-      return;
-    }
-    /* 兜底：题数超标自动结束 */
-    if(questionIndex>questionTotal&&!isEnding){
-      finishInterview(text);
-      return;
-    }
-
     setButtons(false);busying=false;
-    if(isFormal&&questionIndex<questionTotal)startCountdown();
+    if(isFormal)startCountdown();
   }catch(e){
     console.error("[skip error]",e.message||e);
     var aiDiv=box.lastElementChild&&box.lastElementChild.querySelector(".msg-ai-b");
     if(aiDiv)aiDiv.textContent="连接失败："+(e.message||e);
     setButtons(false);busying=false;
   }
+}
+
+async function endInterviewWithAnswer(answerText){
+  if(isEnding)return;isEnding=true;
+  addUserMsg(answerText);
+  showLoading("正在生成总评……");
+  var endMsg=answerText+"\n[指令] 面试结束，请给出本次面试的总评报告，包含：1.整体表现评分 2.各维度点评 3.改进建议 4.简历优化";
+  chatHistory.push({role:"user",content:endMsg});
+  try{
+    var r=await fetch(API_URL,{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({type:"interview",messages:chatHistory})});
+    var d=await r.json();
+    var text=d.text||"（面试结束）";
+    hideLoading();
+    addAIMsg(text,false);
+    chatHistory.push({role:"assistant",content:text});
+    finishInterview(text);
+  }catch(e){
+    hideLoading();
+    finishInterview("面试结束（生成总评失败："+e.message+"）");
+  }
+}
+
+function endInterviewWithSkip(){
+  if(isEnding)return;isEnding=true;
+  showLoading("正在生成总评……");
+  chatHistory.push({role:"user",content:"[指令] 面试结束，请给出本次面试的总评报告，包含：1.整体表现评分 2.各维度点评 3.改进建议 4.简历优化"});
+  fetch(API_URL,{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({type:"interview",messages:chatHistory})}).then(function(r){return r.json()}).then(function(d){
+    var text=d.text||"（面试结束）";
+    hideLoading();
+    addAIMsg(text,false);
+    chatHistory.push({role:"assistant",content:text});
+    finishInterview(text);
+  }).catch(function(e){
+    hideLoading();
+    finishInterview("面试结束（生成总评失败："+e.message+"）");
+  });
 }
 
 function confirmEnd(){
@@ -603,7 +630,7 @@ async function endInterview(){
 async function callInterview(){
   var box=document.getElementById("chat-box");
   try{
-    var body=JSON.stringify({type:"interview",messages:chatHistory});
+    var body=JSON.stringify({type:"interview",messages:chatHistory,isUserAnswer:true});
     console.log("[callInterview] sending",chatHistory.length,"messages, body size:",body.length);
     var fetchPromise=fetch(API_URL,{method:"POST",headers:{"Content-Type":"application/json"},body:body});
     var timeoutPromise=new Promise(function(r){setTimeout(function(){r({timeout:true})},45000)});
@@ -620,31 +647,9 @@ async function callInterview(){
       aiDiv.style.color="#e8e8f0";aiDiv.classList.remove("loading")
     }
     chatHistory.push({role:"assistant",content:text});
-
-    /* 流程推进由AI标记驱动：【下一题】=题答完推进，【面试结束】=面试结束 */
-    var hasNextQ=text.indexOf("【下一题】")>=0||text.indexOf("[下一题]")>=0;
-    var hasEnd=text.indexOf("【面试结束】")>=0||text.indexOf("[面试结束]")>=0;
-
-    if(hasNextQ){
-      questionIndex++;
-      updateQStatus();
-      sendTrack("question_done",{idx:questionIndex,total:questionTotal});
-    }
     skipFlag=false;
-
-    /* AI明确输出【面试结束】时结束 */
-    if(hasEnd&&!isEnding){
-      finishInterview(text);
-      return;
-    }
-    /* 兜底：题数超标自动结束 */
-    if(questionIndex>questionTotal&&!isEnding){
-      finishInterview(text);
-      return;
-    }
-
     setButtons(false);busying=false;
-    if(isFormal&&questionIndex<questionTotal)startCountdown();
+    if(isFormal)startCountdown();
   }catch(e){
     console.error("[callInterview error]",e.message||e);
     var aiDiv=box.lastElementChild&&box.lastElementChild.querySelector(".msg-ai-b");

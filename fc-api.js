@@ -94,19 +94,16 @@ exports.handler = async function(event, context, callback) {
       return;
     }
 
-    // ──── 面试对话（每道题答完后附参考答案） ────
+    // ──── 面试对话（用户答题后附参考答案） ────
     if (body.type === 'interview') {
       var intData = await callBailian(INTERVIEW_APP_ID, msgs);
       var intText = extractText(intData);
 
-      // 题答完（【下一题】）或面试结束（【面试结束】）时附参考答案
-      // 首题标记：面试刚开始，AI出了第一题还没答，不触发参考答案
-      var isFirstQuestion = body.firstQuestion === true;
-      var isDone = intText.indexOf('【下一题】') >= 0 || intText.indexOf('[下一题]') >= 0 ||
-                   intText.indexOf('【面试结束】') >= 0 || intText.indexOf('[面试结束]') >= 0;
+      // 用户已答题时附参考答案（由前端 isUserAnswer 标记控制，不再依赖 AI 回复中的【下一题】文本）
+      var isUserAnswer = body.isUserAnswer === true;
 
       var refText = '';
-      if (isDone && !isFirstQuestion) {
+      if (isUserAnswer) {
         try {
           var refCtx = JSON.stringify(msgs.map(function(m){return m.role+":"+m.content}));
           var refData = await callBailian(REFERENCE_APP_ID, [
