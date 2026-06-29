@@ -386,14 +386,17 @@ async function startInterview(initMsg){
   if(isFormal)startCountdown();
   try{
     var fetchPromise=fetch(API_URL,{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({type:"interview",messages:chatHistory})});
-    var timeoutPromise=new Promise(function(r){setTimeout(function(){r({timeout:true})},25000)});
+    var timeoutPromise=new Promise(function(r){setTimeout(function(){r({timeout:true})},45000)});
     var raceResult=await Promise.race([fetchPromise,timeoutPromise]);
-    if(raceResult.timeout){throw new Error("请求超时，AI响应太慢")}
+    if(raceResult.timeout){throw new Error("请求超时(45秒)，AI响应太慢")}
     var r=raceResult;
+    if(!r.ok){throw new Error("HTTP "+r.status)}
     var d=await r.json();
     var text=d.text||"（无响应）";
     var aiDiv=box.lastElementChild&&box.lastElementChild.querySelector(".msg-ai-b");
-    if(aiDiv){aiDiv.innerHTML=renderMsg(text);aiDiv.style.color="#e8e8f0";aiDiv.classList.remove("loading")}
+    if(aiDiv){
+      try{aiDiv.innerHTML=renderMsg(text)}catch(er){console.error("[renderMsg error]",er);aiDiv.textContent=text}
+      aiDiv.style.color="#e8e8f0";aiDiv.classList.remove("loading")}
     chatHistory.push({role:"assistant",content:text});
     questionIndex=1;
     updateQStatus();
@@ -528,18 +531,24 @@ async function endInterview(){
 async function callInterview(){
   var box=document.getElementById("chat-box");
   try{
-    var fetchPromise=fetch(API_URL,{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({type:"interview",messages:chatHistory})});
-    var timeoutPromise=new Promise(function(r){setTimeout(function(){r({timeout:true})},25000)});
+    var body=JSON.stringify({type:"interview",messages:chatHistory});
+    console.log("[callInterview] sending",chatHistory.length,"messages, body size:",body.length);
+    var fetchPromise=fetch(API_URL,{method:"POST",headers:{"Content-Type":"application/json"},body:body});
+    var timeoutPromise=new Promise(function(r){setTimeout(function(){r({timeout:true})},45000)});
     var raceResult=await Promise.race([fetchPromise,timeoutPromise]);
-    if(raceResult.timeout){throw new Error("请求超时，AI响应太慢")}
+    if(raceResult.timeout){throw new Error("请求超时(45秒)，AI响应太慢")}
     var r=raceResult;
+    if(!r.ok){throw new Error("HTTP "+r.status+": "+r.statusText)}
     var d=await r.json();
     var text=d.text||"（无响应）";
+    console.log("[callInterview] received",text.length,"chars");
     var aiDiv=box.lastElementChild&&box.lastElementChild.querySelector(".msg-ai-b");
-    if(aiDiv){aiDiv.innerHTML=renderMsg(text);aiDiv.style.color="#e8e8f0";aiDiv.classList.remove("loading")}
+    if(aiDiv){
+      try{aiDiv.innerHTML=renderMsg(text)}catch(er){console.error("[renderMsg error]",er);aiDiv.textContent=text}
+      aiDiv.style.color="#e8e8f0";aiDiv.classList.remove("loading")
+    }
     chatHistory.push({role:"assistant",content:text});
 
-    /* AI回复中检测是否推进到下一题（跳过模式前端已推进，防止重复） */
     if(!skipFlag&&(text.indexOf("[下一题]")>=0||text.indexOf("[出题]")>=0||text.indexOf("第"+(questionIndex+1)+"题")>=0||text.indexOf("Q"+(questionIndex+1))>=0)){
       questionIndex++;
       updateQStatus();
@@ -554,8 +563,9 @@ async function callInterview(){
     setButtons(false);busying=false;
     if(isFormal&&questionIndex<questionTotal)startCountdown();
   }catch(e){
+    console.error("[callInterview error]",e.message||e);
     var aiDiv=box.lastElementChild&&box.lastElementChild.querySelector(".msg-ai-b");
-    if(aiDiv)aiDiv.textContent="连接失败："+e.message;
+    if(aiDiv)aiDiv.textContent="连接失败："+(e.message||e);
     setButtons(false);busying=false;
   }
 }
