@@ -264,6 +264,7 @@ var currentController=null;
 var questionTotal=5;
 var questionIndex=0;
 var busying=false;
+var skipFlag=false;
 var interviewId="";
 var interviewRecord=null;
 var typewriterTimer=null;
@@ -351,6 +352,7 @@ function initNumOpts(){
       document.getElementById("q-total").textContent=questionTotal;
     };
   })(opts[i])}
+  for(var i=0;i<opts.length;i++){if(opts[i].classList.contains("on")){questionTotal=parseInt(opts[i].getAttribute("data-n"));break}}
   document.getElementById("q-total").textContent=questionTotal;
 }
 
