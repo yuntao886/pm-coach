@@ -100,11 +100,13 @@ exports.handler = async function(event, context, callback) {
       var intText = extractText(intData);
 
       // 题答完（【下一题】）或面试结束（【面试结束】）时附参考答案
+      // 首题标记：面试刚开始，AI出了第一题还没答，不触发参考答案
+      var isFirstQuestion = body.firstQuestion === true;
       var isDone = intText.indexOf('【下一题】') >= 0 || intText.indexOf('[下一题]') >= 0 ||
                    intText.indexOf('【面试结束】') >= 0 || intText.indexOf('[面试结束]') >= 0;
 
       var refText = '';
-      if (isDone) {
+      if (isDone && !isFirstQuestion) {
         try {
           var refCtx = JSON.stringify(msgs.map(function(m){return m.role+":"+m.content}));
           var refData = await callBailian(REFERENCE_APP_ID, [

@@ -231,7 +231,11 @@ body{font-family:"PingFang SC","Microsoft YaHei",sans-serif;background:var(--bg)
 <!-- ========== Loading ========== -->
 <div id="loading" style="position:fixed;inset:0;display:none;flex-direction:column;align-items:center;justify-content:center;z-index:50;background:rgba(7,7,15,0.85)">
   <div class="spin" style="width:56px;height:56px;border-width:3px;margin-bottom:20px"></div>
-  <div class="sub" id="loading-text">AI正在分析……</div>
+  <div class="sub" id="loading-text" style="margin-bottom:16px">AI正在分析……</div>
+  <div style="width:220px;height:3px;background:rgba(255,255,255,0.06);border-radius:4px;overflow:hidden">
+    <div id="loading-bar" style="height:100%;width:0%;background:linear-gradient(90deg,var(--pri),var(--pri2));border-radius:4px;transition:width .4s cubic-bezier(0.22,1,0.36,1)"></div>
+  </div>
+  <div class="dim" id="loading-pct" style="margin-top:8px;font-size:12px">0%</div>
 </div>
 
 <!-- ========== 弹窗 ========== -->
@@ -303,8 +307,28 @@ function closeMask(){document.getElementById("mask").classList.remove("on");mask
 document.getElementById("mask-ok").onclick=function(){var fn=maskFn;closeMask();if(fn)fn()};
 
 /* ========== Loading ========== */
-function showLoading(txt){document.getElementById("loading").style.display="flex";document.getElementById("loading-text").textContent=txt||"处理中……"}
-function hideLoading(){document.getElementById("loading").style.display="none"}
+var loadingTimer=null,loadingPct=0;
+function showLoading(txt){
+  loadingPct=0;
+  document.getElementById("loading").style.display="flex";
+  document.getElementById("loading-text").textContent=txt||"处理中……";
+  document.getElementById("loading-bar").style.width="0%";
+  document.getElementById("loading-pct").textContent="0%";
+  clearInterval(loadingTimer);
+  loadingTimer=setInterval(function(){
+    var remaining=95-loadingPct;
+    var inc=remaining>30?Math.random()*8+2:remaining>10?Math.random()*3+0.5:Math.random()*0.8+0.1;
+    loadingPct=Math.min(95,loadingPct+inc);
+    document.getElementById("loading-bar").style.width=loadingPct+"%";
+    document.getElementById("loading-pct").textContent=Math.floor(loadingPct)+"%";
+  },300);
+}
+function hideLoading(){
+  clearInterval(loadingTimer);loadingTimer=null;
+  document.getElementById("loading-bar").style.width="100%";
+  document.getElementById("loading-pct").textContent="100%";
+  setTimeout(function(){document.getElementById("loading").style.display="none"},500);
+}
 
 /* ========== 首页 ========== */
 function updateHome(){
@@ -391,7 +415,7 @@ async function startInterview(initMsg){
   document.getElementById("mock-title").textContent=isFormal?("正式面试 · "+selectedPm):"模拟面试";
   if(isFormal)startCountdown();
   try{
-    var fetchPromise=fetch(API_URL,{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({type:"interview",messages:chatHistory})});
+    var fetchPromise=fetch(API_URL,{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({type:"interview",messages:chatHistory,firstQuestion:true})});
     var timeoutPromise=new Promise(function(r){setTimeout(function(){r({timeout:true})},45000)});
     var raceResult=await Promise.race([fetchPromise,timeoutPromise]);
     if(raceResult.timeout){throw new Error("请求超时(45秒)，AI响应太慢")}
@@ -399,6 +423,8 @@ async function startInterview(initMsg){
     if(!r.ok){throw new Error("HTTP "+r.status)}
     var d=await r.json();
     var text=d.text||"（无响应）";
+    /* 安全兜底：首题响应中剥离【参考答案】，防止百炼Agent自身泄露答案 */
+    if(text.indexOf("【参考答案】")>=0)text=text.split("【参考答案】")[0].trim();
     var aiDiv=box.lastElementChild&&box.lastElementChild.querySelector(".msg-ai-b");
     if(aiDiv){
       try{aiDiv.innerHTML=renderMsg(text)}catch(er){console.error("[renderMsg error]",er);aiDiv.textContent=text}
