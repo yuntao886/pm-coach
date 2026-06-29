@@ -67,6 +67,13 @@ body{font-family:"PingFang SC","Microsoft YaHei",sans-serif;background:var(--bg)
 @keyframes blink{0%,100%{opacity:1}50%{opacity:0}}
 .hist-item{background:var(--card);border:1px solid rgba(255,255,255,0.04);border-radius:12px;padding:14px 18px;cursor:pointer;transition:all .2s;width:100%;max-width:460px}
 .hist-item:hover{border-color:rgba(167,139,250,0.2);transform:translateY(-1px)}
+.ref-box{margin-top:10px;background:rgba(45,212,191,0.06);border:1px solid rgba(45,212,191,0.15);border-radius:10px;overflow:hidden}
+.ref-head{padding:8px 14px;cursor:pointer;font-size:13px;color:var(--green);display:flex;align-items:center;justify-content:space-between}
+.ref-head:hover{background:rgba(45,212,191,0.1)}
+.ref-body{padding:10px 14px;font-size:13px;line-height:1.6;white-space:pre-wrap;color:var(--sub);display:none;border-top:1px solid rgba(45,212,191,0.1)}
+.ref-box.open .ref-body{display:block}
+.ref-box.open .ref-arrow{transform:rotate(90deg)}
+.ref-arrow{transition:transform .2s;font-size:12px}
 </style>
 </head>
 <body>
@@ -147,8 +154,9 @@ body{font-family:"PingFang SC","Microsoft YaHei",sans-serif;background:var(--bg)
   <div class="card" style="margin-bottom:16px">
     <div class="h2" style="margin-bottom:12px">📝 题目数量</div>
     <div class="flex gap12" id="num-row">
-      <div class="num-opt on" data-n="3">3</div><div class="num-opt" data-n="5">5</div>
-      <div class="num-opt" data-n="8">8</div><div class="num-opt" data-n="10">10</div>
+      <div class="num-opt on" data-n="3">3</div><div class="num-opt" data-n="4">4</div><div class="num-opt" data-n="5">5</div>
+      <div class="num-opt" data-n="6">6</div><div class="num-opt" data-n="7">7</div><div class="num-opt" data-n="8">8</div>
+      <div class="num-opt" data-n="9">9</div><div class="num-opt" data-n="10">10</div>
     </div>
   </div>
   <div class="card" style="margin-bottom:20px">
@@ -176,7 +184,7 @@ body{font-family:"PingFang SC","Microsoft YaHei",sans-serif;background:var(--bg)
     <div style="text-align:center">
       <span class="sub" style="font-size:14px" id="mock-title">模拟面试</span>
       <span class="status live" style="margin-left:8px" id="q-status">1/<span id="q-total">5</span></span>
-      <span id="timer" style="display:none;margin-left:8px;font-size:13px;color:var(--amber);font-weight:600">⏱ 20s</span>
+      <span id="timer" style="display:none;margin-left:8px;font-size:13px;color:var(--amber);font-weight:600">⏱ 60s</span>
     </div>
     <span style="font-size:14px;color:var(--red);cursor:pointer" onclick="confirmEnd()">结束</span>
   </div>
@@ -184,7 +192,7 @@ body{font-family:"PingFang SC","Microsoft YaHei",sans-serif;background:var(--bg)
   <div class="bar bot">
     <div class="voice" onclick="toggleVoice('chat-inp')">🎤</div>
     <input id="chat-inp" class="inp grow" style="height:40px;padding:0 12px;font-size:14px" placeholder="输入你的回答……" onkeydown="if(event.key==='Enter')sendMsg()">
-    <button class="btn btn-pri" style="width:auto;padding:8px 16px;font-size:13px;height:36px" id="next-btn" disabled>下一题</button>
+    <button class="btn btn-pri" style="width:auto;padding:8px 16px;font-size:13px;height:36px" id="next-btn" disabled>发送</button>
     <button class="btn btn-sec" style="width:auto;padding:8px 12px;font-size:13px;height:36px" id="skip-btn" onclick="sendSkip()" disabled>跳过</button>
   </div>
 </div>
@@ -385,7 +393,7 @@ async function startInterview(initMsg){
     var d=await r.json();
     var text=d.text||"（无响应）";
     var aiDiv=box.lastElementChild&&box.lastElementChild.querySelector(".msg-ai-b");
-    if(aiDiv){aiDiv.textContent=text;aiDiv.style.color="#e8e8f0";aiDiv.classList.remove("loading")}
+    if(aiDiv){aiDiv.innerHTML=renderMsg(text);aiDiv.style.color="#e8e8f0";aiDiv.classList.remove("loading")}
     chatHistory.push({role:"assistant",content:text});
     questionIndex=1;
     updateQStatus();
@@ -439,6 +447,29 @@ function addUserMsg(text){
   box.appendChild(d);box.scrollTop=box.scrollHeight;
 }
 function escapeHTML(s){return s.replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;")}
+
+function renderMsg(text){
+  /* 把【参考答案】xxx 或 [参考答案]xxx 渲染为折叠页 */
+  var html=escapeHTML(text);
+  var refPattern=/【参考答案】([\s\S]*?)(?=\n\n|\n\[|$)/g;
+  var match;
+  while((match=refPattern.exec(text))!==null){
+    var refContent=escapeHTML(match[1].trim());
+    var refId="ref-"+Date.now()+Math.random().toString(36).substr(2,4);
+    var refBlock='<div class="ref-box" id="'+refId+'"><div class="ref-head" onclick="this.parentElement.classList.toggle(\'open\')"><span>📖 参考答案（点击展开）</span><span class="ref-arrow">▶</span></div><div class="ref-body">'+refContent+'</div></div>';
+    html=html.replace(escapeHTML(match[0]),refBlock);
+  }
+  /* 备用：[参考答案]格式 */
+  refPattern=/\[参考答案\]([\s\S]*?)(?=\n\n|\n\[|$)/g;
+  while((match=refPattern.exec(text))!==null){
+    if(html.indexOf('<div class="ref-box"')>=0)continue;
+    var refContent=escapeHTML(match[1].trim());
+    var refId="ref-"+Date.now()+Math.random().toString(36).substr(2,4);
+    var refBlock='<div class="ref-box" id="'+refId+'"><div class="ref-head" onclick="this.parentElement.classList.toggle(\'open\')"><span>📖 参考答案（点击展开）</span><span class="ref-arrow">▶</span></div><div class="ref-body">'+refContent+'</div></div>';
+    html=html.replace(escapeHTML(match[0]),refBlock);
+  }
+  return html;
+}
 
 function setButtons(disabled){
   document.getElementById("next-btn").disabled=disabled;
@@ -502,19 +533,22 @@ async function callInterview(){
     var d=await r.json();
     var text=d.text||"（无响应）";
     var aiDiv=box.lastElementChild&&box.lastElementChild.querySelector(".msg-ai-b");
-    if(aiDiv){aiDiv.textContent=text;aiDiv.style.color="#e8e8f0";aiDiv.classList.remove("loading")}
+    if(aiDiv){aiDiv.innerHTML=renderMsg(text);aiDiv.style.color="#e8e8f0";aiDiv.classList.remove("loading")}
     chatHistory.push({role:"assistant",content:text});
 
-    questionIndex++;
-    updateQStatus();
+    /* AI回复中检测是否推进到下一题 */
+    if(text.indexOf("[下一题]")>=0||text.indexOf("[出题]")>=0||text.indexOf("第"+(questionIndex+1)+"题")>=0||text.indexOf("Q"+(questionIndex+1))>=0){
+      questionIndex++;
+      updateQStatus();
+    }
 
-    if(questionIndex>=questionTotal){
+    if(questionIndex>=questionTotal&&!isEnding){
       finishInterview(text);
       return;
     }
 
     setButtons(false);busying=false;
-    if(isFormal)startCountdown();
+    if(isFormal&&questionIndex<questionTotal)startCountdown();
   }catch(e){
     var aiDiv=box.lastElementChild&&box.lastElementChild.querySelector(".msg-ai-b");
     if(aiDiv)aiDiv.textContent="连接失败："+e.message;
@@ -619,7 +653,7 @@ function startFormal(){
 }
 
 function startCountdown(){
-  timerSec=20;
+  timerSec=60;
   var el=document.getElementById("timer");el.style.display="inline";el.textContent="⏱ "+timerSec+"s";el.style.color="var(--amber)";
   clearInterval(timerId);
   timerId=setInterval(function(){
