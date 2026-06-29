@@ -84,9 +84,9 @@ exports.handler = async function(event, context, callback) {
     if (body.type === 'resume') {
       var resumeData = await callBailian(RESUME_APP_ID, msgs);
       var resumeText = extractText(resumeData);
-      // 同时调优化Agent，把优化结果一起返回，前端存起来面试结束直接用
+      // 同时调优化Agent预优化，前端缓存，面试结束0秒注入
       var optData = await callBailian(OPTIMIZE_APP_ID, [
-        { role: 'user', content: '请基于以下简历和面试信息，生成一份完整的优化简历（Word文档格式），包含个人信息、一句话定位、项目经历、技能标签、面试表现亮点：\n\n原始简历：\n' + (body.resumeRaw || '') + '\n\n简历分析：\n' + resumeText }
+        { role: 'user', content: '请基于以下简历信息，生成一份完整的优化简历（Word文档格式排版），包含个人信息、一句话定位、项目经历、技能标签：\n\n原始简历：\n' + (body.resumeRaw || '') + '\n\n简历分析：\n' + resumeText }
       ]);
       callback(null, build(200, {
         text: resumeText,
@@ -95,19 +95,28 @@ exports.handler = async function(event, context, callback) {
       return;
     }
 
-    // ──── 面试对话（每轮自动附参考答案） ────
+    // ──── 面试对话（只在题答完时附参考答案） ────
     if (body.type === 'interview') {
       var intData = await callBailian(INTERVIEW_APP_ID, msgs);
       var intText = extractText(intData);
-      // 参考答案Agent拿全量上下文，只答当前题，不出下一题
-      var refCtx = JSON.stringify(msgs.map(function(m){return m.role+":"+m.content}));
+
+      // 只在题答完时调参考答案Agent
+      // 检测【下一题】或【面试结束】标记 = 题已答完
+      var isQuestionDone = intText.indexOf('【下一题】') >= 0 ||
+                           intText.indexOf('[下一题]') >= 0 ||
+                           intText.indexOf('【面试结束】') >= 0;
+
       var refText = '';
-      try {
-        var refData = await callBailian(REFERENCE_APP_ID, [
-          { role: 'user', content: '以下是完整面试对话。请为其中最新一道面试题提供详细参考答案（只答这道题，不出下一题）：\n'+refCtx }
-        ]);
-        refText = extractText(refData);
-      } catch (e) { /* 参考答案Agent失败不影响主流程 */ }
+      if (isQuestionDone) {
+        try {
+          var refCtx = JSON.stringify(msgs.map(function(m){return m.role+":"+m.content}));
+          var refData = await callBailian(REFERENCE_APP_ID, [
+            { role: 'user', content: '以下是完整面试对话上下文。请为其中最新一道已完成的面试题提供详细参考答案（只答这道题，不出下一题，不评价用户回答）：\n'+refCtx }
+          ]);
+          refText = extractText(refData);
+        } catch (e) { /* 参考答案Agent失败不影响主流程 */ }
+      }
+
       var combined = intText;
       if (refText) combined += '\n\n' + refText;
       callback(null, build(200, {
@@ -117,17 +126,28 @@ exports.handler = async function(event, context, callback) {
       return;
     }
 
-    // ──── 跳过：参考答案 + 下一题 ────
+    // ──── 跳过：直接调面试Agent处理跳过，然后附参考答案 ────
     if (body.type === 'skip') {
-      var refData = await callBailian(REFERENCE_APP_ID, msgs);
-      var refText = extractText(refData);
-      var nextMsgs = msgs.concat([
-        { role: 'assistant', content: refText },
-        { role: 'user', content: '[指令] 请出下一题（不重复刚才的维度）' }
-      ]);
-      var intData2 = await callBailian(INTERVIEW_APP_ID, nextMsgs);
-      var intText2 = extractText(intData2);
-      callback(null, build(200, { text: refText + '\n\n' + intText2 }));
+      // 跳过 = 此题结束，面试Agent按提示词处理跳过+出下一题
+      var intData = await callBailian(INTERVIEW_APP_ID, msgs);
+      var intText = extractText(intData);
+
+      // 跳过必然算题答完，总是附参考答案（为被跳过的题目）
+      var refText = '';
+      try {
+        var refCtx = JSON.stringify(msgs.map(function(m){return m.role+":"+m.content}));
+        var refData = await callBailian(REFERENCE_APP_ID, [
+          { role: 'user', content: '以下是完整面试对话上下文。用户跳过了最近一道面试题。请为该被跳过的面试题提供详细参考答案（只答这道题，不出下一题）：\n'+refCtx }
+        ]);
+        refText = extractText(refData);
+      } catch (e) { /* 参考答案Agent失败不影响主流程 */ }
+
+      var combined = intText;
+      if (refText) combined += '\n\n' + refText;
+      callback(null, build(200, {
+        text: combined,
+        session_id: (intData.output && intData.output.session_id) || '',
+      }));
       return;
     }
 
@@ -145,9 +165,8 @@ exports.handler = async function(event, context, callback) {
       return;
     }
 
-    // 默认
-    callback(null, build(200, { text: '' }));
+    callback(null, build(200, { status: 'unknown_type' }));
   } catch (e) {
-    callback(null, build(500, { error: e.message }));
+    callback(null, build(500, { error: e.message || 'unknown error' }));
   }
 };

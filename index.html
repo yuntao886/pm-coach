@@ -501,20 +501,17 @@ function sendSkip(){
   if(busying)return;
   stopCountdown();
   addUserMsg("[跳过]");
-  /* 把当前题目发给参考答案Agent */
-  var lastQ=chatHistory.filter(function(m){return m.role==="assistant"}).slice(-1)[0];
-  var skipMsg="请为以下面试题提供参考答案：\n"+(lastQ?lastQ.content:"");
   chatHistory.push({role:"user",content:"[指令] 此题跳过"});
-  questionIndex++;skipFlag=true;updateQStatus();
+  /* 不提前increment questionIndex，让AI响应的【下一题】标记决定推进 */
   setButtons(true);busying=true;
   addAIMsg("",true);
-  callInterviewSkip(skipMsg);
+  callInterviewSkip();
 }
 
-async function callInterviewSkip(skipMsg){
+async function callInterviewSkip(){
   var box=document.getElementById("chat-box");
   try{
-    /* 调skip接口：FC会先调参考答案Agent再调面试Agent出下一题 */
+    /* 调skip接口：FC调面试Agent处理跳过+附参考答案 */
     var r=await fetch(API_URL,{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({type:"skip",messages:chatHistory})});
     if(!r.ok)throw new Error("HTTP "+r.status);
     var d=await r.json();
@@ -526,17 +523,22 @@ async function callInterviewSkip(skipMsg){
       aiDiv.style.color="#e8e8f0";aiDiv.classList.remove("loading")
     }
     chatHistory.push({role:"assistant",content:text});
-    if(text.indexOf("[下一题]")>=0||text.indexOf("第"+(questionIndex+1)+"题")>=0){
-      skipFlag=false;
-    }else{
+
+    /* 流程推进由AI标记驱动，与callInterview一致 */
+    var hasNextQ=text.indexOf("【下一题】")>=0||text.indexOf("[下一题]")>=0;
+    var hasEnd=text.indexOf("【面试结束】")>=0||text.indexOf("[面试结束]")>=0;
+
+    if(hasNextQ){
       questionIndex++;
       updateQStatus();
     }
     skipFlag=false;
-    if(questionIndex>=questionTotal&&!isEnding&&text.indexOf("[下一题]")<0){
+
+    if(hasEnd&&!isEnding){
       finishInterview(text);
       return;
     }
+
     setButtons(false);busying=false;
     if(isFormal&&questionIndex<questionTotal)startCountdown();
   }catch(e){
@@ -592,18 +594,20 @@ async function callInterview(){
     }
     chatHistory.push({role:"assistant",content:text});
 
-    if(!skipFlag&&(text.indexOf("[下一题]")>=0||text.indexOf("【下一题】")>=0||text.indexOf("[出题]")>=0||text.indexOf("第"+(questionIndex+1)+"题")>=0||text.indexOf("Q"+(questionIndex+1))>=0)){
+    /* 流程推进由AI标记驱动：【下一题】=题答完推进，【面试结束】=面试结束 */
+    var hasNextQ=text.indexOf("【下一题】")>=0||text.indexOf("[下一题]")>=0;
+    var hasEnd=text.indexOf("【面试结束】")>=0||text.indexOf("[面试结束]")>=0;
+
+    if(hasNextQ){
       questionIndex++;
       updateQStatus();
     }
     skipFlag=false;
 
-    if(questionIndex>=questionTotal&&!isEnding){
-      /* 有下一题标记=AI刚发了最后一题，让用户答；没有=答完了结束 */
-      if(text.indexOf("[下一题]")<0&&text.indexOf("【下一题】")<0&&text.indexOf("[出题]")<0&&text.indexOf("第"+(questionIndex+1)+"题")<0){
-        finishInterview(text);
-        return;
-      }
+    /* 只在AI明确输出【面试结束】时才结束面试 */
+    if(hasEnd&&!isEnding){
+      finishInterview(text);
+      return;
     }
 
     setButtons(false);busying=false;
@@ -625,10 +629,10 @@ function finishInterview(text){
   updateHome();
   inInterview=false;busying=false;isFormal=false;
   var box=document.getElementById("chat-box");
-  /* 如果有预优化的简历（简历入口），直接注入，无加载时间 */
+  /* 如果有预优化的简历（简历入口），注入Word文档风格+下载按钮 */
   if(optimizedResume){
     var optDiv=document.createElement("div");optDiv.className="msg-ai";
-    optDiv.innerHTML='<div class="msg-ai-a">📄</div><div class="msg-ai-b" style="white-space:pre-wrap;line-height:1.7">'+escapeHTML(optimizedResume)+'</div>';
+    optDiv.innerHTML='<div class="msg-ai-a">📄</div><div class="msg-ai-b" style="white-space:pre-wrap;line-height:1.7">'+renderMsg(optimizedResume)+'<div style="margin-top:12px;text-align:right"><button class="btn btn-sec" style="width:auto;padding:8px 16px;font-size:13px;height:auto" onclick="downloadResume()">📥 下载优化简历</button></div></div>';
     box.appendChild(optDiv);
   }
   var d=document.createElement("div");d.className="msg-ai";d.style.justifyContent="center";
@@ -636,6 +640,13 @@ function finishInterview(text){
   box.appendChild(d);box.scrollTop=box.scrollHeight;
   var qs=document.getElementById("q-status");qs.textContent="已完成";qs.className="status done";
   setButtons(true);
+}
+
+function downloadResume(){
+  if(!optimizedResume){alert("暂无优化简历");return}
+  var blob=new Blob([optimizedResume],{type:"text/plain;charset=utf-8"});
+  var a=document.createElement("a");a.href=URL.createObjectURL(blob);a.download="优化简历_PM面试教练.txt";
+  document.body.appendChild(a);a.click();document.body.removeChild(a);
 }
 
 function forceHome(){
