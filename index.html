@@ -586,10 +586,6 @@ async function sendMsg(){
   if(busying)return;
   stopCountdown();
   var inp=document.getElementById("chat-inp");var text=inp.value.trim();if(!text)return;
-  if(lastQuestionText){
-    var q=lastQuestionText.replace(/[\s]+/g,"");var a=text.replace(/[\s]+/g,"");
-    if(q.length>10&&q===a){inp.value="";addAIMsg("⚠️ 请针对题目作答，不要重复题目内容。",false);return}
-  }
   inp.value="";
   questionIndex++;
   updateQStatus();
