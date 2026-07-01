@@ -643,6 +643,8 @@ function endInterviewWithSkip(){
   });
 }
 
+function clickFormal(){go("p-formal")}
+
 function confirmEnd(){
   if(isEnding)return;
   showMask("结束面试",busying?"AI还在回答中，直接结束将中断当前回答。确定结束吗？":"确定结束本次模拟面试吗？AI将给你本次面试总评。",function(){endInterview()});
