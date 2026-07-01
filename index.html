@@ -456,8 +456,10 @@ async function startInterview(initMsg){
     if(text.indexOf("【参考答案】")>=0)text=text.split("【参考答案】")[0].trim();
     var aiDiv=box.lastElementChild&&box.lastElementChild.querySelector(".msg-ai-b");
     if(aiDiv){
-      try{aiDiv.innerHTML=renderMsg(text)}catch(er){console.error("[renderMsg error]",er);aiDiv.textContent=text}
-      aiDiv.style.color="#e8e8f0";aiDiv.classList.remove("loading")}
+      aiDiv.classList.remove("loading");aiDiv.style.color="#e8e8f0";
+      await typewrite(aiDiv,text);
+      try{aiDiv.innerHTML=renderMsg(text)}catch(er){}
+    }
     chatHistory.push({role:"assistant",content:text});
     questionIndex=1;
     updateQStatus();
@@ -587,8 +589,9 @@ async function callInterviewSkip(){
     console.log("[skip] received",text.length,"chars");
     var aiDiv=box.lastElementChild&&box.lastElementChild.querySelector(".msg-ai-b");
     if(aiDiv){
-      try{aiDiv.innerHTML=renderMsg(text)}catch(er){console.error("[renderMsg]",er);aiDiv.textContent=text}
-      aiDiv.style.color="#e8e8f0";aiDiv.classList.remove("loading")
+      aiDiv.classList.remove("loading");aiDiv.style.color="#e8e8f0";
+      await typewrite(aiDiv,text);
+      try{aiDiv.innerHTML=renderMsg(text)}catch(er){}
     }
     chatHistory.push({role:"assistant",content:text});
     skipFlag=false;
@@ -678,8 +681,9 @@ async function callInterview(){
     console.log("[callInterview] received",text.length,"chars");
     var aiDiv=box.lastElementChild&&box.lastElementChild.querySelector(".msg-ai-b");
     if(aiDiv){
-      try{aiDiv.innerHTML=renderMsg(text)}catch(er){console.error("[renderMsg error]",er);aiDiv.textContent=text}
-      aiDiv.style.color="#e8e8f0";aiDiv.classList.remove("loading")
+      aiDiv.classList.remove("loading");aiDiv.style.color="#e8e8f0";
+      await typewrite(aiDiv,text);
+      try{aiDiv.innerHTML=renderMsg(text)}catch(er){}
     }
     chatHistory.push({role:"assistant",content:text});
     skipFlag=false;
