@@ -115,23 +115,25 @@ body{
 
 <!-- ========== 入口选择 ========== -->
 <div id="p-entry" class="page center">
-  <div class="back" style="position:absolute;top:20px;left:24px" onclick="go('p-home')">← 返回</div>
+  <div class="back" style="position:absolute;top:20px;left:24px" onclick="go('p-home')"><i class="fa-solid fa-arrow-left"></i> 返回</div>
   <div class="orb s"></div>
-  <div class="sub mt16">选择你的入场方式</div>
+  <div class="h1 mt16">选择你的入场方式</div>
+  <div class="sub mt8" style="text-align:center">两种方式，同样专业的面试体验</div>
   <div class="flex col gap16 mt24" style="width:100%;max-width:440px;padding:0 24px">
     <div class="card click" onclick="go('p-resume')">
       <div class="flex" style="gap:16px;align-items:flex-start">
-        <div style="font-size:36px">📄</div>
+        <div style="font-size:24px;color:var(--pri)"><i class="fa-solid fa-file-lines"></i></div>
         <div><div class="h2">投递简历</div><div class="sub mt8">上传或粘贴简历，AI帮你匹配方向</div>
           <div class="flex gap12 mt8"><span class="tag p">匹配分析</span><span class="tag p">简历优化</span></div></div>
       </div></div>
     <div class="card click" onclick="go('p-intro')">
       <div class="flex" style="gap:16px;align-items:flex-start">
-        <div style="font-size:36px">🎤</div>
+        <div style="font-size:24px;color:var(--amber)"><i class="fa-solid fa-microphone-lines"></i></div>
         <div><div class="h2">自我介绍</div><div class="sub mt8">直接开口说，AI提取画像开始面试</div>
           <div class="flex gap12 mt8"><span class="tag b">语音输入</span><span class="tag b">快速开始</span></div></div>
       </div></div>
   </div>
+  <div class="dim mt16" style="color:var(--amber)">⚡ 两种方式都会生成个性化面试题目</div>
 </div>
 
 <!-- ========== 投简历 ========== -->
@@ -392,15 +394,29 @@ function initNumOpts(){
   document.getElementById("q-total").textContent=questionTotal;
 }
 
+/* ========== 消息控制器 ========== */
+function buildMessage(scene,data){
+  data=data||{};
+  switch(scene){
+    case "init":
+      return "[指令] 你是面试官，直接出第1道面试题。方向:AI PM，难度:中厂。开场只说'准备好了吗？开始'然后出题。本次共"+data.total+"题。逐题进行。";
+    case "answer":
+      return "[指令] 用户回答了第"+(questionIndex-1)+"题："+data.answer+"。请先点评再出第"+questionIndex+"题。点评+【参考答案】+出题。";
+    case "skip":
+      return "[指令] 跳过第"+(questionIndex-1)+"题。请给参考答案后出第"+questionIndex+"题，不要重复。";
+    case "end":
+      return "[指令] 面试结束。请基于实际答题表现评分（不是简历）：1.整体评分 2.每题点评 3.改进建议 4.简历优化。跳过题=0分拉低30%。";
+    case "endSkip":
+      return "[指令] 面试结束。请基于实际答题表现评分。跳过题=0分拉低30%。每题点评+改进建议+简历优化。";
+    default: return "";
+  }
+}
+
 /* ========== 模拟面试 ========== */
 function startMock(){
   var jd=document.getElementById("jd-inp").value.trim();
-  /* 只给Agent关键匹配摘要，不传完整简历原文——防止Agent复述到聊天界面 */
-  var summary=matchResult.replace(/[\s\S]*/,"");  /* 提取匹配关键信息 */
-  var brief=matchResult.split("---")[0]||matchResult.substring(0,200);
-  var initMsg="[背景] "+brief+"\n[简历摘要] "+resumeText.substring(0,300)+(resumeText.length>300?"…（详见完整简历）":"")+"\n[指令] 你是面试官。现在开始面试，直接出第1道题。不要复述简历、匹配结果或用户背景。";
-  if(jd)initMsg+="\n[目标JD] "+jd;
-  initMsg+="\n本次共"+questionTotal+"道题。逐题进行，等回答后再出下一题。";
+  var initMsg=buildMessage("init",{total:questionTotal});
+  if(jd)initMsg+="\n目标JD:"+jd.substring(0,300);
   startInterview(initMsg);
 }
 
@@ -409,8 +425,8 @@ async function submitIntro(){
   var text=document.getElementById("intro-inp").value.trim();if(!text)return;
   var btn=document.getElementById("intro-btn");btn.disabled=true;btn.textContent="⏳";
   optimizedResume=""; /* 自我介绍路径不给优化简历 */
-  var brief=matchResult?matchResult.substring(0,200):"";
-  var initMsg="[背景] "+brief+"\n[自我介绍] "+text+"\n[指令] 你是面试官。现在开始面试，直接出第1道题。不要复述背景或自我介绍内容。本次共"+questionTotal+"道题。逐题进行。";
+  var initMsg=buildMessage("init",{total:questionTotal});
+  initMsg+="\n用户自我介绍:"+text.substring(0,300);
   await startInterview(initMsg);
   btn.disabled=false;btn.textContent="说完了 →";
 }
@@ -485,13 +501,13 @@ function typewrite(el,text){
 function addAIMsg(text,loading){
   var box=document.getElementById("chat-box");
   var d=document.createElement("div");d.className="msg-ai";
-  var inner=loading?'<div class="msg-ai-a">🤖</div><div class="msg-ai-b" style="color:#9ca3af">面试官正在思考…<span class="cursor"></span></div>':'<div class="msg-ai-a">🤖</div><div class="msg-ai-b">'+escapeHTML(text)+'</div>';
+  var inner=loading?'<div class="msg-ai-a"><i class="fa-solid fa-robot"></i></div><div class="msg-ai-b" style="color:#9ca3af">面试官正在思考…<span class="cursor"></span></div>':'<div class="msg-ai-a"><i class="fa-solid fa-robot"></i></div><div class="msg-ai-b">'+escapeHTML(text)+'</div>';
   d.innerHTML=inner;box.appendChild(d);box.scrollTop=box.scrollHeight;return d;
 }
 function addUserMsg(text){
   var box=document.getElementById("chat-box");
   var d=document.createElement("div");d.className="msg-ai";d.style.marginLeft="auto";d.style.flexDirection="row-reverse";
-  d.innerHTML='<div class="msg-ai-a" style="background:rgba(167,139,250,0.2)">我</div><div class="msg-ai-b" style="background:linear-gradient(135deg,#a78bfa,#818cf8);color:#fff;border-left:none">'+escapeHTML(text)+'</div>';
+  d.innerHTML='<div class="msg-ai-a" style="background:rgba(78,204,163,0.15);color:var(--pri)"><i class="fa-solid fa-user"></i></div><div class="msg-ai-b" style="background:rgba(78,204,163,0.12);color:var(--text);border-color:rgba(78,204,163,0.2)">'+escapeHTML(text)+'</div>';
   box.appendChild(d);box.scrollTop=box.scrollHeight;
 }
 function escapeHTML(s){return s.replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;")}
@@ -537,7 +553,7 @@ async function sendMsg(){
   /* 答完最后一道题 → 结束面试 */
   if(questionIndex>questionTotal){endInterviewWithAnswer(text);return}
   /* 回答当前题，指令AI点评并出下一题 */
-  var msg="[回答] "+text+" [指令] 请点评第"+(questionIndex-1)+"题并出第"+questionIndex+"题";
+  var msg=buildMessage("answer",{answer:text});
   addUserMsg(text);chatHistory.push({role:"user",content:msg});
   setButtons(true);busying=true;
   addAIMsg("",true);
@@ -554,7 +570,7 @@ function sendSkip(){
   /* 跳过最后一道题 → 结束面试 */
   if(questionIndex>questionTotal){endInterviewWithSkip();return}
   /* 跳过当前题，指令AI给参考答案并出下一题 */
-  chatHistory.push({role:"user",content:"[指令] 跳过第"+(questionIndex-1)+"题，请给出参考答案后出第"+questionIndex+"题，不要重复此题"});
+  chatHistory.push({role:"user",content:buildMessage("skip")});
   setButtons(true);busying=true;
   addAIMsg("",true);
   callInterviewSkip();
@@ -589,7 +605,7 @@ async function endInterviewWithAnswer(answerText){
   if(isEnding)return;isEnding=true;
   addUserMsg(answerText);
   showLoading("正在生成总评……");
-  var endMsg=answerText+"\n[指令] 面试结束。请基于用户的实际答题表现（不是简历）给出总评报告：1.整体评分（1-5星，跳过题=0分并拉低总评30%） 2.每题点评（跳过题标注"未答-0分"并给出该题参考答案） 3.3条具体改进建议 4.优化简历建议。评分依据=实际回答质量，严禁引用简历评分。";
+  var endMsg=buildMessage("end")+"\n用户最后回答："+answerText;
   chatHistory.push({role:"user",content:endMsg});
   try{
     var r=await fetch(API_URL,{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({type:"interview",messages:chatHistory})});
@@ -608,7 +624,7 @@ async function endInterviewWithAnswer(answerText){
 function endInterviewWithSkip(){
   if(isEnding)return;isEnding=true;
   showLoading("正在生成总评……");
-  chatHistory.push({role:"user",content:"[指令] 面试结束。请基于实际答题表现（不是简历）给出总评报告：1.整体评分（跳过题=0分并拉低总评30%） 2.每题点评（跳过题标注"未答-0分"） 3.3条改进建议 4.优化简历建议。评分只基于实际回答质量。";
+  chatHistory.push({role:"user",content:buildMessage("endSkip")});
   fetch(API_URL,{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({type:"interview",messages:chatHistory})}).then(function(r){return r.json()}).then(function(d){
     var text=d.text||"（面试结束）";
     hideLoading();
