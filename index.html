@@ -417,6 +417,7 @@ function buildMessage(scene,data){
 
 /* ========== 模拟面试 ========== */
 function startMock(){
+  isFormal=false;
   var jd=document.getElementById("jd-inp").value.trim();
   var initMsg=buildMessage("init",{total:questionTotal});
   if(jd)initMsg+="\n目标JD:"+jd.substring(0,300);
@@ -425,6 +426,7 @@ function startMock(){
 
 /* ========== 自我介绍 ========== */
 async function submitIntro(){
+  isFormal=false;
   var text=document.getElementById("intro-inp").value.trim();if(!text)return;
   var btn=document.getElementById("intro-btn");btn.disabled=true;btn.textContent="⏳";
   optimizedResume=""; /* 自我介绍路径不给优化简历 */
@@ -609,7 +611,7 @@ async function sendMsg(){
   await callInterview();
 }
 
-function sendSkip(){
+async function sendSkip(){
   if(busying)return;
   stopCountdown();
   addUserMsg("[跳过]");
@@ -622,7 +624,7 @@ function sendSkip(){
   chatHistory.push({role:"user",content:buildMessage("skip")});
   setButtons(true);busying=true;
   addAIMsg("",true);
-  callInterviewSkip();
+  await callInterviewSkip();
 }
 
 async function callInterviewSkip(){
