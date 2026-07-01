@@ -402,13 +402,13 @@ function buildMessage(scene,data){
     case "init":
       return "[指令] 你是面试官，直接出第1道面试题。方向:AI PM，难度:中厂。开场只说'准备好了吗？开始'然后出题。本次共"+data.total+"题。逐题进行。";
     case "answer":
-      return "[指令] 用户回答了第"+(questionIndex-1)+"题："+data.answer+"。请先点评再出第"+questionIndex+"题。点评+【参考答案】+出题。";
+      return "[指令] 用户回答了第"+(questionIndex-1)+"题："+data.answer+"。请：1.【点评】(1-2句优点+改进方向) 2.【改进建议】(独立的、具体的改进方向，2-3条) 3.【参考答案】(详细的STAR结构回答，项目背景/分析过程/关键决策/量化结果，200字以上) 4.出第"+questionIndex+"题。各块用【】标题分隔。";
     case "skip":
-      return "[指令] 第"+(questionIndex-1)+"题被跳过（用户未作答，不是答了）。禁止点评、禁止给改进建议。只需：1.【参考答案】2.出第"+questionIndex+"题。不重复。";
+      return "[指令] 第"+(questionIndex-1)+"题被跳过(用户未作答)。禁止点评、禁止改进建议。只需：1.【参考答案】(详细STAR结构，200字以上) 2.出第"+questionIndex+"题。不重复。";
     case "end":
-      return "[指令] 面试结束。基于实际答题评分（勿引简历）。跳过=未答=0分拉低30%。给总评:1.整体 2.各题简评 3.改进。禁对跳过题详细点评。";
+      return "[指令] 面试结束。基于实际答题评分(勿引简历)。跳过=未答=0分拉低30%。给：1.【整体评价】2.【各题简评】(跳过题标"未答") 3.【改进建议】(2-3条具体) 4.【简历优化建议】。参考答案不要出现在总评里。";
     case "endSkip":
-      return "[指令] 面试结束。基于实际答题评分。跳过=未答=0分拉低30%。给总评。禁点评跳过题的'回答'。";
+      return "[指令] 面试结束。基于实际答题评分。跳过=未答=0分拉低30%。给：【整体评价】+【各题简评】(跳过标"未答")+【改进建议】+【简历优化】。参考答案不出现在总评。";
     default: return "";
   }
 }
@@ -523,19 +523,14 @@ function renderMsg(text){
   /* 更强的兜底：如果Agent以"简历分析"/"定方向"/"加权分"开头，全部截到第一个面试题 */
   text=text.replace(/^(您好[^第题]*?(?:简历分析|定方向|加权分|厂级|经验分|技能分|学历分|匹配方向|分析结论|推荐题数)[\s\S]*?)(?=📋|第\d+\s*题|【参考答案】|【面试|$)/m,"").trim();
   if(!text)text="（准备中…）";
-  /* 把【参考答案】xxx 渲染为折叠页 */
+  /* 把【参考答案】【改进建议】渲染为折叠页 */
   var html=escapeHTML(text);
-  var refPattern=/【参考答案】([\s\S]*?)(?=\n\n|\n📋|\n第\d+\s*题|【面试|\n\[|\n【|$)/g;
-  var match;
-  while((match=refPattern.exec(text))!==null){
-    var refContent=escapeHTML(match[1].trim());
-    if(!refContent)continue;
-    var refId="ref-"+Date.now()+Math.random().toString(36).substr(2,4);
-    var refBlock='<div class="ref-box" id="'+refId+'"><div class="ref-head" onclick="this.parentElement.classList.toggle(\'open\')"><span>📖 参考答案（点击展开）</span><span class="ref-arrow">▶</span></div><div class="ref-body">'+refContent+'</div></div>';
-    html=html.replace(escapeHTML(match[0]),refBlock);
-  }
+  function fold(html,text,label,icon){
+    var p=new RegExp(label.replace(/[.*+?^${}()|[\]\\]/g,'\\$&')+'([\\s\\S]*?)(?=\\n\\n|\\n📋|\\n第\\d+\\s*题|\\n请回答|\\n下一题|【面试|【改进|【参考|【各题|【整体|【简历|\\n\\[|\\n【|$)','g');
+    var m;while((m=p.exec(text))!==null){var c=escapeHTML(m[1].trim());if(!c)continue;var id="ref-"+Date.now()+Math.random().toString(36).substr(2,4);var b='<div class="ref-box" id="'+id+'"><div class="ref-head" onclick="this.parentElement.classList.toggle(\'open\')"><span><i class="fa-solid fa-'+icon+'"></i> '+label+'（点击展开）</span><span class="ref-arrow"><i class="fa-solid fa-chevron-right"></i></span></div><div class="ref-body">'+c+'</div></div>';html=html.replace(escapeHTML(m[0]),b)}return html}
+  html=fold(html,text,"【参考答案】","book-open");
+  html=fold(html,text,"【改进建议】","lightbulb");
   return html;
-}
 
 function setButtons(disabled){
   document.getElementById("next-btn").disabled=disabled;
@@ -821,7 +816,7 @@ function startFormal(){
 }
 
 function startCountdown(){
-  timerSec=60;
+  timerSec=90;
   var el=document.getElementById("timer");el.style.display="inline";el.textContent="⏱ "+timerSec+"s";el.style.color="var(--amber)";
   clearInterval(timerId);
   timerId=setInterval(function(){
