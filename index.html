@@ -403,6 +403,8 @@ function buildMessage(scene,data){
       return "[指令] 你是面试官，直接出第1道面试题。方向:AI PM，难度:中厂。开场只说'准备好了吗？开始'然后出题。本次共"+data.total+"题。逐题进行。";
     case "answer":
       return "[指令] 用户回答第"+(questionIndex-1)+"题:"+data.answer+"。1.【点评】2.【改进建议】3.【参考答案】(详细200字+)4.出第"+questionIndex+"题。各块用【】分隔。";
+    case "lastAnswer":
+      return "[指令] 这是最后一道题，用户回答:"+data.answer+"。1.【点评】2.【改进建议】3.【参考答案】(详细200字+)。不要出下一题。各块用【】分隔。";
     case "skip":
       return "[指令] 第"+(questionIndex-1)+"题跳过(未作答)。禁止点评。只需:1.【参考答案】(详细200字+)2.出第"+questionIndex+"题。";
     case "end":
@@ -505,7 +507,7 @@ function typewrite(el,text){
 function addAIMsg(text,loading){
   var box=document.getElementById("chat-box");
   var d=document.createElement("div");d.className="msg-ai";
-  var inner=loading?'<div class="msg-ai-a"><i class="fa-solid fa-robot"></i></div><div class="msg-ai-b" style="color:#9ca3af">面试官正在思考…<span class="cursor"></span></div>':'<div class="msg-ai-a"><i class="fa-solid fa-robot"></i></div><div class="msg-ai-b">'+escapeHTML(text)+'</div>';
+  var inner=loading?'<div class="msg-ai-a"><i class="fa-solid fa-robot"></i></div><div class="msg-ai-b" style="color:#9ca3af;display:flex;align-items:center;gap:10px"><div class="spin" style="width:20px;height:20px;border-width:2px;margin:4px 0"></div><span>思考中…</span></div>':'<div class="msg-ai-a"><i class="fa-solid fa-robot"></i></div><div class="msg-ai-b">'+escapeHTML(text)+'</div>';
   d.innerHTML=inner;box.appendChild(d);box.scrollTop=box.scrollHeight;return d;
 }
 function addUserMsg(text){
@@ -555,6 +557,30 @@ function setButtons(disabled){
   else document.getElementById("chat-inp").disabled=false;
 }
 
+/* 最后一题答完后，在聊天区插入结束按钮 */
+function addEndButton(){
+  var box=document.getElementById("chat-box");
+  var d=document.createElement("div");d.style.cssText="display:flex;justify-content:center;padding:12px 0;animation:sl .3s ease-out";
+  d.innerHTML='<button class="btn btn-pri" style="width:auto;padding:14px 40px;font-size:16px" onclick="clickEndFromChat()"><i class="fa-solid fa-flag-checkered"></i> 结束面试，查看总评</button>';
+  box.appendChild(d);box.scrollTop=box.scrollHeight;
+}
+
+function clickEndFromChat(){
+  if(isEnding)return;isEnding=true;
+  showLoading("正在生成总评……");
+  chatHistory.push({role:"user",content:buildMessage("end")});
+  fetch(API_URL,{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({type:"interview",messages:chatHistory})}).then(function(r){return r.json()}).then(function(d){
+    var text=d.text||"（面试结束）";
+    hideLoading();
+    addAIMsg(text,false);
+    chatHistory.push({role:"assistant",content:text});
+    finishInterview(text);
+  }).catch(function(e){
+    hideLoading();
+    finishInterview("面试结束（生成总评失败："+e.message+"）");
+  });
+}
+
 /* ========== 面试交互 ========== */
 async function sendMsg(){
   if(busying)return;
@@ -572,8 +598,18 @@ async function sendMsg(){
   }
   questionIndex++;
   updateQStatus();
-  /* 答完最后一道题 → 结束面试 */
-  if(questionIndex>questionTotal){endInterviewWithAnswer(text);return}
+  /* 答完最后一道题 → 先拿点评+参考，不出下一题 */
+  if(questionIndex>questionTotal){
+    var msg=buildMessage("lastAnswer",{answer:text});
+    addUserMsg(text);chatHistory.push({role:"user",content:msg});
+    setButtons(true);busying=true;
+    addAIMsg("",true);
+    await callInterview();
+    /* AI回复完，加结束按钮 */
+    addEndButton();
+    setButtons(false);busying=false;
+    return;
+  }
   /* 回答当前题，指令AI点评并出下一题 */
   var msg=buildMessage("answer",{answer:text});
   addUserMsg(text);chatHistory.push({role:"user",content:msg});
