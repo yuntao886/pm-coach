@@ -395,9 +395,12 @@ function initNumOpts(){
 /* ========== 模拟面试 ========== */
 function startMock(){
   var jd=document.getElementById("jd-inp").value.trim();
-  var initMsg="[匹配结果] "+matchResult+"\n[简历原文] "+resumeText;
+  /* 只给Agent关键匹配摘要，不传完整简历原文——防止Agent复述到聊天界面 */
+  var summary=matchResult.replace(/[\s\S]*/,"");  /* 提取匹配关键信息 */
+  var brief=matchResult.split("---")[0]||matchResult.substring(0,200);
+  var initMsg="[背景] "+brief+"\n[简历摘要] "+resumeText.substring(0,300)+(resumeText.length>300?"…（详见完整简历）":"")+"\n[指令] 你是面试官。现在开始面试，直接出第1道题。不要复述简历、匹配结果或用户背景。";
   if(jd)initMsg+="\n[目标JD] "+jd;
-  initMsg+="\n[指令] 本次面试共"+questionTotal+"道题，请逐题提问。每道题等用户回答后再出下一题。";
+  initMsg+="\n本次共"+questionTotal+"道题。逐题进行，等回答后再出下一题。";
   startInterview(initMsg);
 }
 
@@ -406,8 +409,8 @@ async function submitIntro(){
   var text=document.getElementById("intro-inp").value.trim();if(!text)return;
   var btn=document.getElementById("intro-btn");btn.disabled=true;btn.textContent="⏳";
   optimizedResume=""; /* 自我介绍路径不给优化简历 */
-  var initMsg=matchResult?("[匹配结果] "+matchResult+"\n[自我介绍] "+text):("[自我介绍] "+text);
-  initMsg+="\n[指令] 本次面试共"+questionTotal+"道题，请逐题提问。";
+  var brief=matchResult?matchResult.substring(0,200):"";
+  var initMsg="[背景] "+brief+"\n[自我介绍] "+text+"\n[指令] 你是面试官。现在开始面试，直接出第1道题。不要复述背景或自我介绍内容。本次共"+questionTotal+"道题。逐题进行。";
   await startInterview(initMsg);
   btn.disabled=false;btn.textContent="说完了 →";
 }
@@ -496,9 +499,11 @@ function escapeHTML(s){return s.replace(/&/g,"&amp;").replace(/</g,"&lt;").repla
 function renderMsg(text){
   /* 过滤掉流程控制标记（前端自主推进，不再显示给用户） */
   text=text.replace(/【下一题】|\[下一题\]|【面试结束】|\[面试结束\]/g,"").trim();
-  /* 兜底：若Agent误输出简历分析，截掉[匹配结果]和[简历原文]段落 */
-  text=text.replace(/\[匹配结果\][\s\S]*?(?=\[简历原文\]|📋|第\d+题|【参考答案】|【面试)/,"").trim();
-  text=text.replace(/\[简历原文\][\s\S]*?(?=📋|第\d+题|【参考答案】|【面试|$)/,"").trim();
+  /* 兜底：截掉简历分析块（多种格式），只保留面试题部分 */
+  text=text.replace(/\[匹配结果\][\s\S]*?(?=\[简历原文\]|📋|第\d+\s*题|【参考答案】|【面试)/,"").trim();
+  text=text.replace(/\[简历原文\][\s\S]*?(?=📋|第\d+\s*题|【参考答案】|【面试|$)/,"").trim();
+  /* 更强的兜底：如果Agent以"简历分析"/"定方向"/"加权分"开头，全部截到第一个面试题 */
+  text=text.replace(/^(您好[^第题]*?(?:简历分析|定方向|加权分|厂级|经验分|技能分|学历分|匹配方向|分析结论|推荐题数)[\s\S]*?)(?=📋|第\d+\s*题|【参考答案】|【面试|$)/m,"").trim();
   if(!text)text="（准备中…）";
   /* 把【参考答案】xxx 渲染为折叠页 */
   var html=escapeHTML(text);
@@ -584,7 +589,7 @@ async function endInterviewWithAnswer(answerText){
   if(isEnding)return;isEnding=true;
   addUserMsg(answerText);
   showLoading("正在生成总评……");
-  var endMsg=answerText+"\n[指令] 面试结束，请给出本次面试的总评报告，包含：1.整体表现评分 2.各维度点评 3.改进建议 4.简历优化";
+  var endMsg=answerText+"\n[指令] 面试结束。请基于用户的实际答题表现（不是简历）给出总评报告：1.整体评分（1-5星，跳过题=0分并拉低总评30%） 2.每题点评（跳过题标注"未答-0分"并给出该题参考答案） 3.3条具体改进建议 4.优化简历建议。评分依据=实际回答质量，严禁引用简历评分。";
   chatHistory.push({role:"user",content:endMsg});
   try{
     var r=await fetch(API_URL,{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({type:"interview",messages:chatHistory})});
@@ -603,7 +608,7 @@ async function endInterviewWithAnswer(answerText){
 function endInterviewWithSkip(){
   if(isEnding)return;isEnding=true;
   showLoading("正在生成总评……");
-  chatHistory.push({role:"user",content:"[指令] 面试结束，请给出本次面试的总评报告，包含：1.整体表现评分 2.各维度点评 3.改进建议 4.简历优化"});
+  chatHistory.push({role:"user",content:"[指令] 面试结束。请基于实际答题表现（不是简历）给出总评报告：1.整体评分（跳过题=0分并拉低总评30%） 2.每题点评（跳过题标注"未答-0分"） 3.3条改进建议 4.优化简历建议。评分只基于实际回答质量。";
   fetch(API_URL,{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({type:"interview",messages:chatHistory})}).then(function(r){return r.json()}).then(function(d){
     var text=d.text||"（面试结束）";
     hideLoading();
