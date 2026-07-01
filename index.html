@@ -525,11 +525,12 @@ function renderMsg(text){
   if(!text)text="（准备中…）";
   /* 把【参考答案】【改进建议】渲染为折叠页 */
   var html=escapeHTML(text);
-  function fold(html,text,label,icon){
-    var p=new RegExp(label.replace(/[.*+?^${}()|[\]\\]/g,'\\$&')+'([\\s\\S]*?)(?=\\n\\n|\\n📋|\\n第\\d+\\s*题|\\n请回答|\\n下一题|【面试|【改进|【参考|【各题|【整体|【简历|\\n\\[|\\n【|$)','g');
-    var m;while((m=p.exec(text))!==null){var c=escapeHTML(m[1].trim());if(!c)continue;var id="ref-"+Date.now()+Math.random().toString(36).substr(2,4);var b='<div class="ref-box" id="'+id+'"><div class="ref-head" onclick="this.parentElement.classList.toggle(\'open\')"><span><i class="fa-solid fa-'+icon+'"></i> '+label+'（点击展开）</span><span class="ref-arrow"><i class="fa-solid fa-chevron-right"></i></span></div><div class="ref-body">'+c+'</div></div>';html=html.replace(escapeHTML(m[0]),b)}return html}
-  html=fold(html,text,"【参考答案】","book-open");
-  html=fold(html,text,"【改进建议】","lightbulb");
+  /* 参考答案折叠 */
+  var refRe=/【参考答案】([\s\S]*?)(?=\n\n|\n📋|\n第\d+\s*题|\n请回答|\n下一题|【面试|【改进|【各题|【整体|【简历|\n\[|\n【|$)/g;
+  var m;while((m=refRe.exec(text))!==null){var c=escapeHTML(m[1].trim());if(c){var id="r"+Date.now()+Math.random().toString(36).substr(2,4);var b='<div class="ref-box" id="'+id+'"><div class="ref-head" onclick="this.parentElement.classList.toggle(\'open\')"><span><i class="fa-solid fa-book-open"></i> 参考答案（点击展开）</span><span class="ref-arrow"><i class="fa-solid fa-chevron-right"></i></span></div><div class="ref-body">'+c+'</div></div>';html=html.replace(escapeHTML(m[0]),b)}}
+  /* 改进建议折叠 */
+  var impRe=/【改进建议】([\s\S]*?)(?=\n\n|\n📋|\n第\d+\s*题|\n请回答|\n下一题|【面试|【参考|【各题|【整体|【简历|\n\[|\n【|$)/g;
+  while((m=impRe.exec(text))!==null){var c=escapeHTML(m[1].trim());if(c){var id="i"+Date.now()+Math.random().toString(36).substr(2,4);var b='<div class="ref-box" id="'+id+'"><div class="ref-head" onclick="this.parentElement.classList.toggle(\'open\')"><span><i class="fa-solid fa-lightbulb"></i> 改进建议（点击展开）</span><span class="ref-arrow"><i class="fa-solid fa-chevron-right"></i></span></div><div class="ref-body">'+c+'</div></div>';html=html.replace(escapeHTML(m[0]),b)}}
   return html;
 }
 
