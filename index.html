@@ -586,16 +586,11 @@ async function sendMsg(){
   if(busying)return;
   stopCountdown();
   var inp=document.getElementById("chat-inp");var text=inp.value.trim();if(!text)return;
-  inp.value="";
-  /* 防无关消息：用户发的和当前题目太像 → 忽略 */
   if(lastQuestionText){
-    var q=lastQuestionText.replace(/[\\s\\?？，。、！!]/g,"");
-    var a=text.replace(/[\\s\\?？，。、！!]/g,"");
-    if(q.length>10&&a.length>10&&(q===a||(q.indexOf(a)>=0||a.indexOf(q)>=0)&&Math.abs(q.length-a.length)<Math.min(q.length,a.length)*0.3)){
-      addAIMsg("⚠️ 请针对题目作答，不要重复题目内容。",false);
-      return;
-    }
+    var q=lastQuestionText.replace(/[\s]+/g,"");var a=text.replace(/[\s]+/g,"");
+    if(q.length>10&&q===a){inp.value="";addAIMsg("⚠️ 请针对题目作答，不要重复题目内容。",false);return}
   }
+  inp.value="";
   questionIndex++;
   updateQStatus();
   /* 答完最后一道题 → 先拿点评+参考，不出下一题 */
