@@ -457,10 +457,11 @@ async function startInterview(initMsg){
     var aiDiv=box.lastElementChild&&box.lastElementChild.querySelector(".msg-ai-b");
     if(aiDiv){
       aiDiv.classList.remove("loading");aiDiv.style.color="#e8e8f0";
-      await typewrite(aiDiv,text);
-      try{aiDiv.innerHTML=renderMsg(text)}catch(er){}
+      aiDiv.innerHTML=renderMsg(text);
     }
     chatHistory.push({role:"assistant",content:text});
+    var qm=text.match(/第\d+\s*题[：:]\s*(.+?)(?=\n|【|$)/);
+    if(qm)lastQuestionText=qm[0];
     questionIndex=1;
     updateQStatus();
     setButtons(false);
@@ -526,7 +527,7 @@ function renderMsg(text){
   if(!text)text="（准备中…）";
   /* 把【参考答案】xxx 渲染为折叠页 */
   var html=escapeHTML(text);
-  var refPattern=/【参考答案】([\s\S]*?)(?=\n\n|\n📋|\n第\d+\s*题|\n请回答|\n下一题|【面试|【改进|【各题|【整体|【简历|\n\[|\n【|$)/g;
+  var refPattern=/【参考答案】([\s\S]*?)(?=\n\n|\n📋|出第\d+|第\d+\s*题|\n第\d+\s*题|\n请回答|\n下一题|【面试|【改进|【各题|【整体|【简历|\n\[|\n【|$)/g;
   var match;
   while((match=refPattern.exec(text))!==null){
     var refContent=escapeHTML(match[1].trim());
@@ -536,7 +537,7 @@ function renderMsg(text){
     html=html.replace(escapeHTML(match[0]),refBlock);
   }
   /* 改进建议折叠 */
-  var impPattern=/【改进建议】([\s\S]*?)(?=\n\n|\n📋|\n第\d+\s*题|\n请回答|【面试|【参考|【各题|【整体|【简历|\n\[|\n【|$)/g;
+  var impPattern=/【改进建议】([\s\S]*?)(?=\n\n|\n📋|出第\d+|第\d+\s*题|\n第\d+\s*题|\n请回答|【面试|【参考|【各题|【整体|【简历|\n\[|\n【|$)/g;
   while((match=impPattern.exec(text))!==null){
     var impContent=escapeHTML(match[1].trim());
     if(!impContent)continue;
@@ -560,6 +561,15 @@ async function sendMsg(){
   stopCountdown();
   var inp=document.getElementById("chat-inp");var text=inp.value.trim();if(!text)return;
   inp.value="";
+  /* 防无关消息：用户发的和当前题目太像 → 忽略 */
+  if(lastQuestionText){
+    var q=lastQuestionText.replace(/[\\s\\?？，。、！!]/g,"");
+    var a=text.replace(/[\\s\\?？，。、！!]/g,"");
+    if(q.length>10&&a.length>10&&(q===a||(q.indexOf(a)>=0||a.indexOf(q)>=0)&&Math.abs(q.length-a.length)<Math.min(q.length,a.length)*0.3)){
+      addAIMsg("⚠️ 请针对题目作答，不要重复题目内容。",false);
+      return;
+    }
+  }
   questionIndex++;
   updateQStatus();
   /* 答完最后一道题 → 结束面试 */
@@ -599,10 +609,11 @@ async function callInterviewSkip(){
     var aiDiv=box.lastElementChild&&box.lastElementChild.querySelector(".msg-ai-b");
     if(aiDiv){
       aiDiv.classList.remove("loading");aiDiv.style.color="#e8e8f0";
-      await typewrite(aiDiv,text);
-      try{aiDiv.innerHTML=renderMsg(text)}catch(er){}
+      aiDiv.innerHTML=renderMsg(text);
     }
     chatHistory.push({role:"assistant",content:text});
+    var qm=text.match(/第\d+\s*题[：:]\s*(.+?)(?=\n|【|$)/);
+    if(qm)lastQuestionText=qm[0];
     skipFlag=false;
     setButtons(false);busying=false;
     if(isFormal)startCountdown();
@@ -700,10 +711,11 @@ async function callInterview(){
     var aiDiv=box.lastElementChild&&box.lastElementChild.querySelector(".msg-ai-b");
     if(aiDiv){
       aiDiv.classList.remove("loading");aiDiv.style.color="#e8e8f0";
-      await typewrite(aiDiv,text);
-      try{aiDiv.innerHTML=renderMsg(text)}catch(er){}
+      aiDiv.innerHTML=renderMsg(text);
     }
     chatHistory.push({role:"assistant",content:text});
+    var qm=text.match(/第\d+\s*题[：:]\s*(.+?)(?=\n|【|$)/);
+    if(qm)lastQuestionText=qm[0];
     skipFlag=false;
     setButtons(false);busying=false;
     if(isFormal)startCountdown();
