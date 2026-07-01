@@ -404,11 +404,11 @@ function buildMessage(scene,data){
     case "answer":
       return "[指令] 用户回答了第"+(questionIndex-1)+"题："+data.answer+"。请先点评再出第"+questionIndex+"题。点评+【参考答案】+出题。";
     case "skip":
-      return "[指令] 跳过第"+(questionIndex-1)+"题。请给参考答案后出第"+questionIndex+"题，不要重复。";
+      return "[指令] 第"+(questionIndex-1)+"题被跳过（用户未作答，不是答了）。禁止点评、禁止给改进建议。只需：1.【参考答案】2.出第"+questionIndex+"题。不重复。";
     case "end":
-      return "[指令] 面试结束。请基于实际答题表现评分（不是简历）：1.整体评分 2.每题点评 3.改进建议 4.简历优化。跳过题=0分拉低30%。";
+      return "[指令] 面试结束。基于实际答题评分（勿引简历）。跳过=未答=0分拉低30%。给总评:1.整体 2.各题简评 3.改进。禁对跳过题详细点评。";
     case "endSkip":
-      return "[指令] 面试结束。请基于实际答题表现评分。跳过题=0分拉低30%。每题点评+改进建议+简历优化。";
+      return "[指令] 面试结束。基于实际答题评分。跳过=未答=0分拉低30%。给总评。禁点评跳过题的'回答'。";
     default: return "";
   }
 }
@@ -456,9 +456,8 @@ async function startInterview(initMsg){
     if(text.indexOf("【参考答案】")>=0)text=text.split("【参考答案】")[0].trim();
     var aiDiv=box.lastElementChild&&box.lastElementChild.querySelector(".msg-ai-b");
     if(aiDiv){
-      aiDiv.classList.remove("loading");aiDiv.style.color="#e8e8f0";
-      await typewrite(aiDiv,text);
-      try{aiDiv.innerHTML=renderMsg(text)}catch(er){}
+      aiDiv.classList.remove("loading");
+      try{aiDiv.innerHTML=renderMsg(text)}catch(er){console.error(er);aiDiv.textContent=text}
     }
     chatHistory.push({role:"assistant",content:text});
     questionIndex=1;
@@ -526,7 +525,7 @@ function renderMsg(text){
   if(!text)text="（准备中…）";
   /* 把【参考答案】xxx 渲染为折叠页 */
   var html=escapeHTML(text);
-  var refPattern=/【参考答案】([\s\S]*?)(?=\n\n|\n\[|\n【|$)/g;
+  var refPattern=/【参考答案】([\s\S]*?)(?=\n\n|\n📋|\n第\d+\s*题|【面试|\n\[|\n【|$)/g;
   var match;
   while((match=refPattern.exec(text))!==null){
     var refContent=escapeHTML(match[1].trim());
@@ -570,13 +569,20 @@ function sendSkip(){
   sendTrack("question_skipped",{idx:questionIndex,total:questionTotal});
   questionIndex++;
   updateQStatus();
-  /* 跳过最后一道题 → 结束面试 */
-  if(questionIndex>questionTotal){endInterviewWithSkip();return}
+  /* 跳过最后一题：先拿参考再结束 */
+  if(questionIndex>questionTotal){skipLastAndEnd();return}
   /* 跳过当前题，指令AI给参考答案并出下一题 */
   chatHistory.push({role:"user",content:buildMessage("skip")});
   setButtons(true);busying=true;
   addAIMsg("",true);
   callInterviewSkip();
+}
+
+async function skipLastAndEnd(){
+  chatHistory.push({role:"user",content:buildMessage("skip")});
+  addAIMsg("",true);setButtons(true);busying=true;
+  await callInterviewSkip();
+  endInterviewWithSkip();
 }
 
 async function callInterviewSkip(){
@@ -589,9 +595,8 @@ async function callInterviewSkip(){
     console.log("[skip] received",text.length,"chars");
     var aiDiv=box.lastElementChild&&box.lastElementChild.querySelector(".msg-ai-b");
     if(aiDiv){
-      aiDiv.classList.remove("loading");aiDiv.style.color="#e8e8f0";
-      await typewrite(aiDiv,text);
-      try{aiDiv.innerHTML=renderMsg(text)}catch(er){}
+      aiDiv.classList.remove("loading");
+      try{aiDiv.innerHTML=renderMsg(text)}catch(er){console.error(er);aiDiv.textContent=text}
     }
     chatHistory.push({role:"assistant",content:text});
     skipFlag=false;
@@ -681,9 +686,8 @@ async function callInterview(){
     console.log("[callInterview] received",text.length,"chars");
     var aiDiv=box.lastElementChild&&box.lastElementChild.querySelector(".msg-ai-b");
     if(aiDiv){
-      aiDiv.classList.remove("loading");aiDiv.style.color="#e8e8f0";
-      await typewrite(aiDiv,text);
-      try{aiDiv.innerHTML=renderMsg(text)}catch(er){}
+      aiDiv.classList.remove("loading");
+      try{aiDiv.innerHTML=renderMsg(text)}catch(er){console.error(er);aiDiv.textContent=text}
     }
     chatHistory.push({role:"assistant",content:text});
     skipFlag=false;
